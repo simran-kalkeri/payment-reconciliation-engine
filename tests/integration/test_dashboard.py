@@ -4,6 +4,7 @@ import json
 from contextlib import closing
 from hashlib import sha256
 from datetime import date, timedelta
+from io import StringIO
 from threading import Event, Thread
 from time import monotonic, sleep
 
@@ -88,7 +89,7 @@ def test_dashboard_reads_reports_and_reviews_with_existing_audit(database, tmp_p
                 route = f"/api/datasets/{dataset['id']}"
                 bundle = datasets / dataset["id"]
                 assert {file["name"] for file in dataset["files"]} == {"ledger.csv", "settlements.csv"}
-                assert sum(file["rows"] for file in dataset["files"]) >= 10_000
+                assert 10_008 <= sum(file["rows"] for file in dataset["files"]) <= 15_000
                 for file in dataset["files"]:
                     status, content, headers = send(f"{route}/{file['name']}")
                     assert status == 200 and "attachment" in headers["Content-Disposition"]
@@ -139,7 +140,12 @@ def test_dashboard_reads_reports_and_reviews_with_existing_audit(database, tmp_p
             worker.join(5)
 
 
-def test_dataset_regeneration_replaces_previous_bundle(tmp_path, monkeypatch):
+@pytest.mark.parametrize(("choose", "first_total", "second_total"), [
+    ("minimum", 10_008, 10_010),
+    ("maximum", 15_000, 14_998),
+])
+def test_dataset_regeneration_replaces_previous_bundle(tmp_path, monkeypatch, choose, first_total, second_total):
+    monkeypatch.setattr("reconciliation.generator.randbelow", lambda size: 0 if choose == "minimum" else size - 1)
     root = tmp_path / "datasets"
     root.mkdir()
     (root / "unrelated").mkdir()
@@ -162,23 +168,41 @@ def test_dataset_regeneration_replaces_previous_bundle(tmp_path, monkeypatch):
             finally:
                 with_connection.close()
 
+        def check_dataset(dataset, expected_total):
+            route = f"/api/datasets/{dataset['id']}"
+            actual = 0
+            for file in dataset["files"]:
+                status, payload = send(f"{route}/{file['name']}")
+                assert status == 200
+                rows = sum(1 for _ in csv.DictReader(StringIO(payload.decode("utf-8"))))
+                assert rows == file["rows"]
+                actual += rows
+            assert actual == expected_total
+            answer = send(f"{route}/answer_key.json")[1]
+            assert actual - len(answer["invalid_rows"]) >= 10_000
+            assert {label for row in answer["rows"] for label in row["labels"]} == {
+                "missing_settlement", "duplicate_settlement", "amount_mismatch", "late_settlement", "reference_mismatch",
+            }
+
         try:
             assert send("/api/datasets/current") == (200, None)
             status, first = send("/api/datasets", generate=True)
             assert status == 201
+            check_dataset(first, first_total)
             first_route = f"/api/datasets/{first['id']}"
 
             def fail_generation(*args, **kwargs):
                 raise OSError("Simulated disk error")
 
             with monkeypatch.context() as failure:
-                failure.setattr("reconciliation.dashboard.generate", fail_generation)
+                failure.setattr("reconciliation.dashboard.generate_dashboard_dataset", fail_generation)
                 assert send("/api/datasets", generate=True)[0] == 500
             assert send("/api/datasets/current")[1]["id"] == first["id"]
             assert send(first_route + "/ledger.csv")[0] == 200
 
             status, second = send("/api/datasets", generate=True)
             assert status == 201
+            check_dataset(second, second_total)
             assert second["seed"] != first["seed"]
             hashes = {file["name"]: file["sha256"] for file in first["files"]}
             assert all(file["sha256"] != hashes[file["name"]] for file in second["files"])
@@ -205,10 +229,10 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
 
     monkeypatch.setattr("reconciliation.dashboard_pipeline.work", pause_at_validation)
 
-    def generate_test_dataset(inputs, truth, seed, **options):
-        return generate(inputs, truth, seed, count=160, per_category=5, **options)
+    def generate_test_dataset(inputs, truth, seed, previous_total):
+        return generate(inputs, truth, seed, count=160, per_category=5, two_files=True, merchant_profiles=True)
 
-    monkeypatch.setattr("reconciliation.dashboard.generate", generate_test_dataset)
+    monkeypatch.setattr("reconciliation.dashboard.generate_dashboard_dataset", generate_test_dataset)
     root = tmp_path / "datasets"
     raw = tmp_path / "raw"
     with DashboardServer(database, 0, local_demo=True, dataset_root=root, raw_root=raw) as server:

@@ -370,7 +370,8 @@ function showDataset(dataset) {
   if (changed) renderPipeline(null);
   const ledger = dataset.files.find((file) => file.kind === "ledger");
   const settlements = dataset.files.find((file) => file.kind === "settlement");
-  $("dataset-summary").textContent = integer.format(ledger.rows) + " ledger rows · " +
+  $("dataset-summary").textContent = integer.format(ledger.rows + settlements.rows) + " total rows · " +
+    integer.format(ledger.rows) + " ledger · " +
     integer.format(settlements.rows) + " settlement rows · seed " + dataset.seed;
   $("dataset-downloads").replaceChildren(...[
     [ledger.name, "Ledger CSV"], [settlements.name, "Settlements CSV"],

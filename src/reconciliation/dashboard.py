@@ -21,7 +21,7 @@ from . import workbench
 from .contracts import CATEGORIES, scope_id
 from .dashboard_pipeline import DashboardPipeline
 from .db import event, query
-from .generator import generate
+from .generator import generate_dashboard_dataset
 from .reporting import atomic_write, json_file, render_report
 from .storage import LocalStore
 
@@ -294,12 +294,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 raise RequestError(409, "Wait for reconciliation to finish before generating a new dataset.")
             root.mkdir(parents=True, exist_ok=True)
             previous = current_dataset(root)
+            previous_total = sum(file["rows"] for file in previous["files"]) if previous else None
             seed = secrets.randbits(48)
             while previous and seed == previous["seed"]:
                 seed = secrets.randbits(48)
             with TemporaryDirectory(dir=root) as temp:
                 bundle = Path(temp) / "dataset"
-                manifest = generate(bundle / "inputs", bundle / "truth", seed, two_files=True, merchant_profiles=True)
+                manifest = generate_dashboard_dataset(bundle / "inputs", bundle / "truth", seed, previous_total)
                 bundle.rename(root / dataset_id)
             dataset = {"id": dataset_id, "seed": seed, "files": manifest["files"]}
             json_file(root / "current.json", dataset)

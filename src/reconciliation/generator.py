@@ -2,6 +2,7 @@ import csv
 import random
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
+from secrets import randbelow
 
 from .contracts import BUSINESS_TZ, FIELDS, SCHEMA_VERSION, local_start, public_id
 from .reporting import json_file
@@ -14,6 +15,10 @@ LEDGER_SOURCE = "ledger-office"
 SETTLEMENT_SOURCE = "upi-bank"
 SEEDED = ("missing_settlement", "duplicate_settlement", "amount_mismatch",
           "late_settlement", "reference_mismatch")
+OVERLAPPING_CASES = 24
+AMBIGUOUS_CASES = 12
+UNEXPECTED_SETTLEMENTS = 24
+INVALID_ROWS = 8
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 PAYMENT_PROFILES = (
     ((5900, 9900, 14900, 24900, 39900), 2500, 75000),
@@ -59,24 +64,46 @@ def format_day(value, layout):
     return value.isoformat()
 
 
+def generate_dashboard_dataset(inputs, truth_dir, seed, previous_total=None):
+    # Missing and duplicate settlements balance each other in the generator.
+    extra_rows = AMBIGUOUS_CASES + UNEXPECTED_SETTLEMENTS + INVALID_ROWS
+    # Keep at least 10,000 transactions even after quarantining invalid rows.
+    minimum, maximum = 10_000 + INVALID_ROWS, 15_000
+    counts = range((minimum - extra_rows + 1) // 2, (maximum - extra_rows) // 2 + 1)
+    previous_count = None
+    if previous_total is not None and (previous_total - extra_rows) % 2 == 0:
+        previous_count = (previous_total - extra_rows) // 2
+    skip_previous = previous_count in counts
+    count = counts.start + randbelow(len(counts) - int(skip_previous))
+    if skip_previous and count >= previous_count:
+        count += 1
+    manifest = generate(inputs, truth_dir, seed, count=count, two_files=True, merchant_profiles=True)
+    actual = sum(file["rows"] for file in manifest["files"])
+    if actual != 2 * count + extra_rows or not minimum <= actual <= maximum:
+        raise ValueError("Generated dataset did not meet its row count limits")
+    return manifest
+
+
 def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_files=False,
              merchant_profiles=False):
     inputs, truth_dir = Path(inputs), Path(truth_dir)
     if (inputs.resolve() == truth_dir.resolve() or inputs.resolve() in truth_dir.resolve().parents
             or truth_dir.resolve() in inputs.resolve().parents):
         raise ValueError("Use separate sibling directories for inputs and evaluation truth")
-    if per_category < 1 or count < per_category * len(SEEDED) + 36:
+    special_cases = OVERLAPPING_CASES + AMBIGUOUS_CASES
+    if per_category < 1 or count < per_category * len(SEEDED) + special_cases:
         raise ValueError("Dataset is too small for the requested error counts")
     inputs.mkdir(parents=True, exist_ok=True)
     truth_dir.mkdir(parents=True, exist_ok=True)
     rng = random.Random(seed)
     ledger, settlement, truths, invalid, unexpected, ambiguous = [], [], [], [], [], []
-    slots = rng.sample(range(count), per_category * len(SEEDED) + 36)
+    slots = rng.sample(range(count), per_category * len(SEEDED) + special_cases)
     anomalies = {index: [label] for offset, label in enumerate(SEEDED)
                  for index in slots[offset * per_category:(offset + 1) * per_category]}
     overlap = slots[per_category * len(SEEDED):]
-    for index in overlap[:24]:
+    for index in overlap[:OVERLAPPING_CASES]:
         anomalies[index] = ["late_settlement", "reference_mismatch" if index % 2 else "amount_mismatch"]
+    ambiguous_slots = overlap[OVERLAPPING_CASES:]
 
     def opaque_id():
         return f"{rng.getrandbits(96):024x}"
@@ -102,7 +129,7 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
             gross = rng.choice([9900, 14900, 19900, 24900, 49900, 99900])
         else:
             gross = rng.randrange(2500, 900000)
-        if index in overlap[24:]:
+        if index in ambiguous_slots:
             merchant = 41
             common.update(merchant="merchant-41", account=f"account-{overlap.index(index)}")
         left = dict(id=opaque_id(), **common, reference=f"  {ref.lower()}  " if index % 7 == 0 else ref,
@@ -134,7 +161,7 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
             duplicate_hour = hour + 2
         else:
             fee = min(gross // 10, rng.choice((0, 0, 15, 35, 75, 140)))
-        if index in overlap[24:]:
+        if index in ambiguous_slots:
             # Equal reference distance from the true and competing ledger entries.
             clone = dict(left, id=opaque_id(), reference="B" + ref[1:])
             left["reference"] = "A" + ref[1:]
@@ -154,7 +181,7 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
             truth["extras"].append(dict(settlement=public_id(SETTLEMENT_SOURCE, extra["id"]),
                                         available_at=extra["available_at"]))
 
-    for _ in range(24):
+    for _ in range(UNEXPECTED_SETTLEMENTS):
         common = dict(merchant="merchant-42", account="account-1", currency="INR")
         day = FIRST_DAY + timedelta(days=rng.randrange(3))
         right = settlement_row(common, reference(), 14900, 20, day)
