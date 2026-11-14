@@ -3,9 +3,21 @@
 const $ = (id) => document.getElementById(id);
 const state = { reports: [], tab: "pipeline", cursor: null, issue: null, reportLoad: 0, queueLoad: 0 };
 const pipelineSteps = {
-  read: "Read input files", stage: "Extract and stage rows", validate: "Validate and normalize",
-  match: "Exact and fuzzy matching", publish: "Publish reports", evaluate: "Evaluate results",
+  read: { label: "Read inputs", nodeType: "Ledger + settlements", icon: "⇥",
+    description: "Verify both CSVs against the dataset manifest before reading them." },
+  stage: { label: "Stage rows", nodeType: "PostgreSQL", icon: "▤",
+    description: "Keep a raw copy of each input and stage its rows for processing." },
+  validate: { label: "Validate", nodeType: "Normalize rows", icon: "✓",
+    description: "Normalize references, dates, and amounts. Quarantine invalid rows with a reason and continue with valid rows." },
+  match: { label: "Match", nodeType: "Reconciliation rules", icon: "⇄",
+    description: "Match each ledger entry to at most one settlement. Cases with competing candidates go to review." },
+  publish: { label: "Publish", nodeType: "Reports + exceptions", icon: "▥",
+    description: "Save the daily totals, financial exposure, and exceptions for review." },
+  evaluate: { label: "Evaluate", nodeType: "Answer key", icon: "◎",
+    description: "Score the published results against the answer key. Review precision, recall, and the reasons for missed links." },
 };
+const matchingPasses = { exact: "Exact references", diagnostic: "Amount mismatches", fuzzy: "Fuzzy references" };
+const workflow = { nodes: new Map(), job: null, selected: "read", follow: true };
 const categories = {
   missing_settlement: "Missing settlement", duplicate_settlement: "Duplicate settlement",
   amount_mismatch: "Amount mismatch", late_settlement: "Late settlement",
@@ -383,24 +395,99 @@ async function openPipelineReport(job, report, scroll = false) {
   if (scroll) $("main").scrollIntoView();
 }
 
+function initializeWorkflow() {
+  for (const [key, step] of Object.entries(pipelineSteps)) {
+    const node = el("li", null, "workflow-node");
+    node.dataset.step = key;
+    const edge = el("span", null, "workflow-edge");
+    edge.setAttribute("aria-hidden", "true");
+    const icon = el("span", step.icon, "workflow-glyph");
+    icon.setAttribute("aria-hidden", "true");
+    const name = el("span", null, "workflow-node-name");
+    name.append(el("strong", step.label), el("small", step.nodeType));
+    const status = el("span", "Waiting", "stage-state");
+    const button = el("button", null, "workflow-node-button");
+    button.type = "button";
+    button.setAttribute("aria-controls", "workflow-inspector");
+    button.append(icon, name, status);
+    button.addEventListener("click", () => {
+      workflow.follow = false;
+      workflow.selected = key;
+      renderStage();
+    });
+    node.append(button, edge);
+    workflow.nodes.set(key, { node, button, status });
+    $("pipeline-steps").append(node);
+  }
+}
+
+function stageState(job, key) {
+  if (!job) return "Waiting";
+  if (job.stage === key && job.status === "failed") return "Failed";
+  if (job.stage === key && job.status === "running") return "Running";
+  return job.steps[key] ? "Complete" : "Waiting";
+}
+
+function renderStage() {
+  const { job, selected, follow, nodes } = workflow;
+  for (const [key, { node, button, status }] of nodes) {
+    const text = stageState(job, key);
+    node.dataset.state = text;
+    if (status.textContent !== text) status.textContent = text;
+    button.setAttribute("aria-pressed", String(key === selected));
+    if (text === "Running") button.setAttribute("aria-current", "step");
+    else button.removeAttribute("aria-current");
+  }
+  $("follow-run").setAttribute("aria-pressed", String(follow));
+  const step = pipelineSteps[selected];
+  $("stage-title").textContent = step.label;
+  $("stage-description").textContent = step.description;
+  const status = stageState(job, selected);
+  $("stage-status").textContent = status;
+  $("stage-status").dataset.state = status;
+
+  let detail = job?.steps[selected] || "Waiting for this stage.";
+  if (status === "Failed") detail = job.error || detail;
+  if (selected === "read" && state.dataset && status !== "Failed") {
+    const ledger = integer.format(state.dataset.files.find((file) => file.kind === "ledger").rows);
+    const settlements = integer.format(state.dataset.files.find((file) => file.kind === "settlement").rows);
+    detail = `${ledger} ledger rows · ${settlements} settlement rows. ${job?.steps.read || ""}`.trim();
+  }
+  if ($("stage-detail").textContent !== detail) $("stage-detail").textContent = detail;
+  $("stage-passes").hidden = selected !== "match";
+  $("open-evaluation").hidden = selected !== "evaluate" || !job?.evaluation;
+  if (selected === "match") renderMatchingPasses(job, status);
+}
+
+function renderMatchingPasses(job, status) {
+  const passes = Object.entries(matchingPasses);
+  const phase = job?.match_phase;
+  const active = passes.findIndex(([key]) => key === phase);
+  const reports = job?.reports || [];
+  const hasCounts = reports.length > 0 && passes.every(([key]) =>
+    reports.every((report) => Number.isInteger(report[key + "_matches"])));
+  $("stage-passes").replaceChildren(...passes.map(([key, label], index) => {
+    const pass = el("li");
+    const count = hasCounts ? reports.reduce((sum, report) => sum + report[key + "_matches"], 0) : null;
+    const finished = status === "Complete" || phase === "done" || (active >= 0 && index < active);
+    const passStatus = finished ? "Complete" : index === active ? status : "Waiting";
+    pass.dataset.state = passStatus;
+    pass.append(el("span", label), el("small", passStatus +
+      (count === null ? "" : " · " + integer.format(count) + " published")));
+    return pass;
+  }));
+}
+
 function renderPipeline(job) {
+  workflow.job = job;
+  if (workflow.follow) workflow.selected = job?.stage || "read";
   state.pipelineBusy = job?.status === "running";
   updateDatasetButtons();
   $("run-pipeline").textContent = state.pipelineBusy ? "Reconciliation running…" :
     job?.status === "complete" ? "Run again" : job ? "Retry reconciliation" : "Run reconciliation";
-  $("pipeline-steps").replaceChildren(...Object.entries(pipelineSteps).map(([key, label]) => {
-    const detail = job?.steps[key];
-    const active = job?.stage === key;
-    const status = active && job.status === "failed" ? "Failed" :
-      active && state.pipelineBusy ? "Running" : detail ? "Complete" : "Waiting";
-    const step = el("li");
-    step.dataset.state = status;
-    if (active && state.pipelineBusy) step.setAttribute("aria-current", "step");
-    step.append(el("strong", label), el("span", status + (detail ? " · " + detail : "")));
-    return step;
-  }));
+  renderStage();
   const status = !job ? "Waiting for a run." : job.error || (state.pipelineBusy ?
-    pipelineSteps[job.stage] + " · " + job.steps[job.stage] :
+    pipelineSteps[job.stage].label + " · " + job.steps[job.stage] :
     "Evaluation complete. " + job.reports.length + " daily reports ready.");
   if ($("pipeline-status").textContent !== status) $("pipeline-status").textContent = status;
   const reports = job?.reports || [];
@@ -540,6 +627,15 @@ $("issues-tab").addEventListener("click", () => switchTab("issues"));
 $("refresh").addEventListener("click", () => state.tab === "pipeline" ? start() : refresh());
 $("generate-dataset").addEventListener("click", generateDataset);
 $("run-pipeline").addEventListener("click", runPipeline);
+$("follow-run").addEventListener("click", () => {
+  workflow.follow = !workflow.follow;
+  if (workflow.follow) workflow.selected = workflow.job?.stage || "read";
+  renderStage();
+});
+$("open-evaluation").addEventListener("click", () => {
+  $("evaluation").scrollIntoView();
+  $("evaluation-title").focus({ preventScroll: true });
+});
 $("scope").addEventListener("change", () => { fillDays(); act(() => loadTab(true)); });
 $("day").addEventListener("change", () => act(() => loadTab(true)));
 $("snapshot").addEventListener("change", () => act(loadReport));
@@ -582,5 +678,6 @@ async function start() {
 window.addEventListener("hashchange", () => {
   if (new URLSearchParams(location.hash.slice(1)).has("access")) start();
 });
+initializeWorkflow();
 renderPipeline(null);
 start();

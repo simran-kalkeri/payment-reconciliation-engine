@@ -60,10 +60,12 @@ class DashboardPipeline:
             Thread(target=self.run, args=(dataset, inputs, started["scope"]), daemon=True).start()
             return started
 
-    def step(self, name, detail):
+    def step(self, name, detail, *, phase=None):
         with self.lock:
             self.job["stage"] = name
             self.job["steps"][name] = detail
+            if phase is not None:
+                self.job["match_phase"] = phase
 
     def finish(self, error=None, *, evaluation=None, output=None):
         with self.lock:
@@ -142,14 +144,14 @@ class DashboardPipeline:
         results = []
         for index, day in enumerate(days, 1):
             date_detail = f"Day {index} of {len(days)} ({day})"
-            self.step("match", f"{date_detail} · Loading validated transactions…")
+            self.step("match", f"{date_detail} · Loading validated transactions…", phase="loading")
 
             def match_progress(phase):
                 if phase == "publish":
-                    self.step("match", f"{date_detail} · Exact and fuzzy passes complete.")
+                    self.step("match", f"{date_detail} · Exact and fuzzy passes complete.", phase="done")
                     self.step("publish", f"{date_detail} · Saving the report and exception queue…")
                 else:
-                    self.step("match", f"{date_detail} · {MATCH_PHASES[phase]}…")
+                    self.step("match", f"{date_detail} · {MATCH_PHASES[phase]}…", phase=phase)
 
             report, evidence = reconcile(self.db, scope, day, cutoff, rules, file_ids, True, progress=match_progress)
             if report["status"] != "complete":
@@ -158,6 +160,7 @@ class DashboardPipeline:
             with self.lock:
                 self.job["reports"].append({key: report[key] for key in (
                     "result_id", "business_date", "ledger_matched", "ledger_unmatched", "settlement_unmatched",
+                    "exact_matches", "diagnostic_matches", "fuzzy_matches",
                 )})
         self.step("publish", f"{len(days)} daily reports and their exceptions are ready.")
         return results, rules

@@ -54,13 +54,26 @@
             <div id="dataset-downloads" class="downloads" hidden></div>
           </section>
           <section id="pipeline" class="panel pipeline" aria-labelledby="pipeline-title">
-            <h2 id="pipeline-title">Run progress</h2>
-            <ol id="pipeline-steps" class="pipeline-steps"></ol>
-            <p id="pipeline-status" role="status" class="dataset-help">Waiting for a run.</p>
-            <div id="pipeline-results" class="downloads" aria-label="Open daily results"></div>
+            <div class="workflow-header">
+              <div><h2 id="pipeline-title">Workflow</h2><p id="pipeline-status" role="status">Waiting for a run.</p></div>
+              <button id="follow-run" type="button" class="button quiet" aria-pressed="true">Follow run</button>
+            </div>
+            <div class="workflow-layout">
+              <div class="workflow-canvas">
+                <ol id="pipeline-steps" class="pipeline-steps" aria-label="Workflow stages"></ol>
+              </div>
+              <aside class="workflow-inspector" id="workflow-inspector" aria-labelledby="stage-title">
+                <div class="stage-heading"><h3 id="stage-title"></h3><span id="stage-status" class="stage-state"></span></div>
+                <p id="stage-description"></p>
+                <div class="stage-output"><p id="stage-detail"></p></div>
+                <ol id="stage-passes" class="stage-passes" aria-label="Matching steps" hidden></ol>
+                <button id="open-evaluation" class="button quiet" type="button" hidden>View evaluation</button>
+              </aside>
+            </div>
+            <div id="pipeline-results" class="downloads workflow-reports" aria-label="Open daily results"></div>
           </section>
           <section id="evaluation" class="panel evaluation" aria-labelledby="evaluation-title" hidden>
-            <div class="panel-heading"><div><h2 id="evaluation-title">Evaluation</h2><p id="evaluation-context"></p></div></div>
+            <div class="panel-heading"><div><h2 id="evaluation-title" tabindex="-1">Evaluation</h2><p id="evaluation-context"></p></div></div>
             <div id="evaluation-summary" class="metrics"></div>
             <div class="table-wrap evaluation-table">
               <table><caption class="sr-only">Precision and recall by seeded error type</caption>

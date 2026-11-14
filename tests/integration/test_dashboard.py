@@ -263,6 +263,7 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
                 assert status == 200 and report["scope"] == first["scope"]
                 assert report["business_date"] == item["business_date"]
                 assert report["ledger_matched"] > 0 and report["rejected_rows"] == 8
+                assert item["exact_matches"] + item["diagnostic_matches"] + item["fuzzy_matches"] == report["ledger_matched"]
                 assert all(report["conservation"].values())
             day = first["reports"][0]["business_date"]
             assert send(f"/api/issues?scope={first['scope']}&day={day}")[1]["issues"]
@@ -271,6 +272,7 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
             assert send(route, post=True)[0] == 202
             replay = finished()
             assert replay["status"] == "complete", replay
+            assert replay["match_phase"] == "done"
             assert replay["reports"] == first["reports"]
             assert counts(database) == before
             evaluation = replay["evaluation"]
