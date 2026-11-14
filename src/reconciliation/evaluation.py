@@ -1,4 +1,4 @@
-"""Offline scoring. This module opens truth and published result exports only."""
+"""Score completed reconciliation results against a separate answer key."""
 
 import json
 from collections import Counter
@@ -20,8 +20,16 @@ def metrics(expected, predicted):
 
 
 def evaluate(truth_path, result_paths, output):
-    truth = json.loads(Path(truth_path).read_text(encoding="utf-8"))
     results = [json.loads(Path(path).read_text(encoding="utf-8")) for path in result_paths]
+    summary, analysis = score_results(truth_path, results)
+    output = Path(output)
+    json_file(output / "metrics.json", summary)
+    json_file(output / "mistake-analysis.json", analysis)
+    return summary
+
+
+def score_results(truth_path, results):
+    truth = json.loads(Path(truth_path).read_text(encoding="utf-8"))
     if not results or any(row["report"]["status"] != "complete" for row in results):
         raise ValueError("Evaluate one or more complete result exports")
     reports = {row["report"]["business_date"]: row["report"] for row in results}
@@ -92,10 +100,60 @@ def evaluate(truth_path, result_paths, output):
                    abstentions=len(abstentions), deliberate_ambiguities_retained=len(
                        set(truth["deliberate_ambiguity"]) & abstentions.keys()),
                    missed_link_reasons=dict(Counter(row["reason"] for row in misses)))
-    output = Path(output)
-    json_file(output / "metrics.json", summary)
-    json_file(output / "mistake-analysis.json", {
+    return summary, {
         "false_fuzzy_matches": [row for row in wrong if row["method"] == "fuzzy"],
         "all_incorrect_links": wrong, "missed_true_links": misses, "abstentions": abstentions,
-    })
-    return summary
+    }
+
+
+def explain_misses(analysis, minimum_score, minimum_margin):
+    """Explain each missed link using recorded evidence and the active rules."""
+    wrong = {row["ledger"]: row for row in analysis["all_incorrect_links"]}
+    summaries = {
+        "competing_exact_claims": ("Competing exact matches", "The exact pass held this entry for review."),
+        "competing_diagnostic_claims": ("Competing amount checks",
+                                        "The amount mismatch check held this entry for review."),
+        "no_eligible_or_retained_candidate": (
+            "No candidate retained",
+            "The engine kept no candidate for this entry. The recorded evidence can't identify which check excluded it.",
+        ),
+    }
+    cases = []
+    for miss in analysis["missed_true_links"]:
+        ledger = miss["ledger"]
+        reason = miss["reason"]
+        abstention = analysis["abstentions"].get(ledger, {})
+        candidates = abstention.get("candidates", [])
+        if ledger in wrong:
+            method = {"exact": "exact", "diagnostic": "amount mismatch", "fuzzy": "fuzzy"}[wrong[ledger]["method"]]
+            label, detail = "Wrong settlement linked", f"The {method} pass linked this entry to a different settlement."
+        elif reason == "below_score_or_reciprocal_margin" and candidates:
+            label, detail = explain_fuzzy_rejection(ledger, candidates, minimum_score, minimum_margin)
+        else:
+            label, detail = summaries.get(reason, ("Reason unavailable", "The result contains no specific reason."))
+        cases.append({**miss, "label": label, "detail": detail, "candidates": candidates})
+    return {
+        "reason_counts": dict(Counter(case["label"] for case in cases)),
+        "cases": cases,
+    }
+
+
+def explain_fuzzy_rejection(ledger, candidates, minimum_score, minimum_margin):
+    own = sorted((row for row in candidates if row["ledger"] == ledger),
+                 key=lambda row: (-row["score"], row["settlement"]))
+    top = own[0]
+    score = top["score"]
+    if score < minimum_score:
+        return "Reference score too low", f"The best reference scored {score}/100. The minimum is {minimum_score}."
+    competitors = [
+        ("Another settlement for this ledger entry", own[1]["score"] if len(own) > 1 else None),
+        ("Another ledger entry for this settlement", max(
+            (row["score"] for row in candidates
+             if row["ledger"] != ledger and row["settlement"] == top["settlement"]), default=None)),
+    ]
+    for description, rival_score in competitors:
+        if rival_score is not None and score - rival_score < minimum_margin:
+            label = "Tied candidates" if score == rival_score else "Competing candidates too close"
+            return label, (f"{description} scored {rival_score}/100. This pair scored {score}/100 and "
+                           f"needed a lead of at least {minimum_margin} points.")
+    return "Match confidence check failed", "The recorded candidates did not meet the match confidence checks."

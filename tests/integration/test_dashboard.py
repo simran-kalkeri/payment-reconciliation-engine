@@ -236,7 +236,9 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
             status, dataset = send("/api/datasets", post=True)
             assert status == 201
             route = f"/api/datasets/{dataset['id']}/reconcile"
-            (root / dataset["id"] / "truth" / "answer_key.json").unlink()
+            answer_key = root / dataset["id"] / "truth" / "answer_key.json"
+            truth = answer_key.read_bytes()
+            answer_key.unlink()
 
             assert send(route, post=True)[0] == 202
             assert entered_validation.wait(10)
@@ -249,8 +251,10 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
             continue_validation.set()
 
             first = finished()
-            assert first["status"] == "complete", first
-            assert set(first["steps"]) == {"read", "stage", "validate", "match", "publish"}
+            assert first["status"] == "failed" and first["stage"] == "evaluate", first
+            assert "valid answer key" in first["error"]
+            assert "evaluation" not in first
+            assert set(first["steps"]) == {"read", "stage", "validate", "match", "publish", "evaluate"}
             assert len(first["reports"]) == 3
             assert len(list(raw.glob("*/*"))) == 2
             assert len(send("/api/reports")[1]) == 3
@@ -263,11 +267,24 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
             day = first["reports"][0]["business_date"]
             assert send(f"/api/issues?scope={first['scope']}&day={day}")[1]["issues"]
             before = counts(database)
+            answer_key.write_bytes(truth)
             assert send(route, post=True)[0] == 202
             replay = finished()
             assert replay["status"] == "complete", replay
             assert replay["reports"] == first["reports"]
             assert counts(database) == before
+            evaluation = replay["evaluation"]
+            assert evaluation["seed"] == dataset["seed"]
+            assert evaluation["business_dates"] == [item["business_date"] for item in first["reports"]]
+            assert set(evaluation["error_metrics"]) == {
+                "missing_settlement", "duplicate_settlement", "amount_mismatch", "late_settlement", "reference_mismatch",
+            }
+            assert evaluation["false_matches"] == {"exact": 0, "diagnostic": 0, "fuzzy": 0}
+            assert evaluation["misses"]["reason_counts"]["Tied candidates"] == 12
+            assert evaluation["missed_true_links"] == len(evaluation["misses"]["cases"])
+            with server.pipeline.lock:
+                server.pipeline.job = None
+            assert send("/api/pipeline") == (200, replay)
         finally:
             continue_validation.set()
             server.shutdown()

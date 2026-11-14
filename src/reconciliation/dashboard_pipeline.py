@@ -10,10 +10,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .contracts import timestamp
 from .db import event, query
+from .evaluation import explain_misses, score_results
 from .ingestion import InvalidFile, ingest
 from .matching import Rules
 from .normalization import work
 from .reconcile import reconcile
+from .reporting import json_file
 from .storage import file_hash
 
 
@@ -63,13 +65,26 @@ class DashboardPipeline:
             self.job["stage"] = name
             self.job["steps"][name] = detail
 
-    def finish(self, error=None):
+    def finish(self, error=None, *, evaluation=None, output=None):
         with self.lock:
-            self.job.update(status="failed" if error else "complete", error=error)
+            result = {**self.job, "status": "failed" if error else "complete", "error": error}
+            if evaluation is not None:
+                result["evaluation"] = evaluation
+                json_file(output, result)
+            self.job = result
 
     def run(self, dataset, inputs, scope):
         try:
-            self.process(dataset, inputs, scope)
+            results, rules = self.process(dataset, inputs, scope)
+            self.step("evaluate", "Comparing published results with the answer key…")
+            try:
+                summary, analysis = score_results(inputs.parent / "truth" / "answer_key.json", results)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                event("dashboard-evaluation", scope=scope, error=type(exc).__name__)
+                raise PipelineError("The daily reports are ready. Evaluation needs a valid answer key for this dataset.") from exc
+            evaluation = {**summary, "misses": explain_misses(analysis, rules.minimum_score, rules.minimum_margin)}
+            self.step("evaluate", "Scored all business dates and explained missed links.")
+            self.finish(evaluation=evaluation, output=inputs.parent / "pipeline-result.json")
         except PipelineError as exc:
             self.finish(str(exc))
         except InvalidFile:
@@ -83,8 +98,6 @@ class DashboardPipeline:
         except Exception as exc:
             event("dashboard-pipeline", scope=scope, error=type(exc).__name__)
             self.finish("The reconciliation stopped unexpectedly. Check the dashboard terminal, then retry.")
-        else:
-            self.finish()
 
     def process(self, dataset, inputs, scope):
         manifest = json.loads((inputs / "manifest.json").read_text(encoding="utf-8"))
@@ -126,6 +139,7 @@ class DashboardPipeline:
             raise PipelineError("Some rows are still being processed. Retry after the worker finishes.")
         self.step("validate", f"{counts.get('accepted', 0):,} accepted, {counts.get('rejected', 0):,} quarantined.")
 
+        results = []
         for index, day in enumerate(days, 1):
             date_detail = f"Day {index} of {len(days)} ({day})"
             self.step("match", f"{date_detail} · Loading validated transactions…")
@@ -137,11 +151,13 @@ class DashboardPipeline:
                 else:
                     self.step("match", f"{date_detail} · {MATCH_PHASES[phase]}…")
 
-            report, _ = reconcile(self.db, scope, day, cutoff, rules, file_ids, True, progress=match_progress)
+            report, evidence = reconcile(self.db, scope, day, cutoff, rules, file_ids, True, progress=match_progress)
             if report["status"] != "complete":
                 raise PipelineError(f"Could not publish the report for {day}. Retry once the inputs are ready.")
+            results.append({"report": report, **evidence})
             with self.lock:
                 self.job["reports"].append({key: report[key] for key in (
                     "result_id", "business_date", "ledger_matched", "ledger_unmatched", "settlement_unmatched",
                 )})
         self.step("publish", f"{len(days)} daily reports and their exceptions are ready.")
+        return results, rules

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Daily payment reports and exception review">
+  <meta name="description" content="Run and evaluate payment reconciliation">
   <title>Reconciliation Workbench</title>
   <link rel="stylesheet" href="/dashboard.css">
   <script src="/dashboard.js" defer></script>
@@ -17,7 +17,10 @@
         <div><strong>Reconciliation</strong><small>PAYMENT WORKBENCH</small></div>
       </div>
       <nav aria-label="Workspace">
-        <button id="reports-tab" type="button" class="nav-item selected" aria-current="page">
+        <button id="pipeline-tab" type="button" class="nav-item selected" aria-current="page">
+          <span class="nav-icon pipeline-icon" aria-hidden="true"></span> Pipeline
+        </button>
+        <button id="reports-tab" type="button" class="nav-item">
           <span class="nav-icon report-icon" aria-hidden="true"></span> Daily reports
         </button>
         <button id="issues-tab" type="button" class="nav-item">
@@ -31,27 +34,47 @@
         <span>Reconciliation workspace</span>
         <div class="top-actions">
           <button id="refresh" type="button" class="button quiet">↻ <span>Refresh data</span></button>
-          <button id="pipeline-shortcut" type="button" class="button quiet" hidden>Current dataset</button>
-          <button id="generate-dataset" type="button" class="button primary">Generate dataset</button>
         </div>
       </header>
       <div class="content">
         <div class="notice" id="notice" role="alert" hidden></div>
-        <div id="dataset-status" class="notice" role="status" hidden></div>
-        <section id="dataset" class="panel dataset-panel" aria-labelledby="dataset-title" hidden>
-          <div class="panel-heading">
-            <div><h2 id="dataset-title">Synthetic dataset</h2><p id="dataset-summary"></p></div>
-            <div class="top-actions">
-              <button id="close-dataset" type="button" class="button quiet">Hide dataset</button>
-              <button id="run-pipeline" type="button" class="button primary">Run reconciliation</button>
-            </div>
+        <section id="pipeline-page" aria-labelledby="pipeline-page-title">
+          <div class="page-heading">
+            <div><h1 id="pipeline-page-title">Reconciliation pipeline</h1><p>Run a synthetic dataset and check the results against its answer key.</p></div>
           </div>
-          <div id="dataset-downloads" class="downloads"></div>
-          <section id="pipeline" class="pipeline" aria-labelledby="pipeline-title" hidden>
-            <h3 id="pipeline-title">Reconciliation progress</h3>
+          <div id="dataset-status" class="notice" role="status" hidden></div>
+          <section id="dataset" class="panel dataset-panel" aria-labelledby="dataset-title">
+            <div class="panel-heading">
+              <div><h2 id="dataset-title">Synthetic dataset</h2><p id="dataset-summary">Generate a dataset to start a run.</p></div>
+              <div class="top-actions">
+                <button id="generate-dataset" type="button" class="button quiet" disabled>Generate dataset</button>
+                <button id="run-pipeline" type="button" class="button primary" hidden disabled>Run reconciliation</button>
+              </div>
+            </div>
+            <div id="dataset-downloads" class="downloads" hidden></div>
+          </section>
+          <section id="pipeline" class="panel pipeline" aria-labelledby="pipeline-title">
+            <h2 id="pipeline-title">Run progress</h2>
             <ol id="pipeline-steps" class="pipeline-steps"></ol>
-            <p id="pipeline-status" role="status" class="dataset-help"></p>
+            <p id="pipeline-status" role="status" class="dataset-help">Waiting for a run.</p>
             <div id="pipeline-results" class="downloads" aria-label="Open daily results"></div>
+          </section>
+          <section id="evaluation" class="panel evaluation" aria-labelledby="evaluation-title" hidden>
+            <div class="panel-heading"><div><h2 id="evaluation-title">Evaluation</h2><p id="evaluation-context"></p></div></div>
+            <div id="evaluation-summary" class="metrics"></div>
+            <div class="table-wrap evaluation-table">
+              <table><caption class="sr-only">Precision and recall by seeded error type</caption>
+                <thead><tr><th scope="col">Error type</th><th scope="col">Precision</th><th scope="col">Recall</th>
+                  <th scope="col">Detected</th><th scope="col">In answer key</th></tr></thead>
+                <tbody id="evaluation-metrics"></tbody>
+              </table>
+            </div>
+            <p class="dataset-help" id="evaluation-notes"></p>
+            <div class="evaluation-misses">
+              <h3>Why true links were missed</h3>
+              <ul id="evaluation-reasons"></ul>
+              <details id="evaluation-cases"><summary>See individual cases</summary><ol id="evaluation-case-list"></ol></details>
+            </div>
           </section>
         </section>
         <div id="empty" class="empty panel" hidden></div>

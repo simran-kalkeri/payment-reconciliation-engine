@@ -1,10 +1,10 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const state = { reports: [], tab: "reports", cursor: null, issue: null, reportLoad: 0, queueLoad: 0 };
+const state = { reports: [], tab: "pipeline", cursor: null, issue: null, reportLoad: 0, queueLoad: 0 };
 const pipelineSteps = {
   read: "Read input files", stage: "Extract and stage rows", validate: "Validate and normalize",
-  match: "Exact and fuzzy matching", publish: "Publish reports and exceptions",
+  match: "Exact and fuzzy matching", publish: "Publish reports", evaluate: "Evaluate results",
 };
 const categories = {
   missing_settlement: "Missing settlement", duplicate_settlement: "Duplicate settlement",
@@ -30,6 +30,7 @@ const reasonLabels = {
   reciprocal_top_score_and_margin: "Both records preferred this link by the required margin.",
 };
 const integer = new Intl.NumberFormat("en-IN");
+const percent = new Intl.NumberFormat("en-IN", { style: "percent", maximumFractionDigits: 2 });
 const money = (value) => {
   if (value == null) return "—";
   const n = BigInt(value);
@@ -90,8 +91,7 @@ async function refresh(selection) {
   try {
     state.reports = await request("/api/reports");
     connection("Local database connected", true);
-    $("workspace").hidden = !state.reports.length;
-    $("empty").hidden = !!state.reports.length;
+    showReportWorkspace();
     $("empty").textContent = "No published reports. Generate a dataset and run reconciliation to see results here.";
     if (!state.reports.length) return;
     const scopes = [...new Set(state.reports.map((report) => report.scope))];
@@ -115,22 +115,31 @@ function fillDays(prior) {
 
 const context = () => new URLSearchParams({ scope: $("scope").value, day: $("day").value });
 
+function showReportWorkspace() {
+  $("workspace").hidden = state.tab === "pipeline" || !state.reports.length;
+  $("empty").hidden = state.tab === "pipeline" || Boolean(state.reports.length);
+}
+
 function switchTab(tab, load = true) {
   state.tab = tab;
-  for (const name of ["reports", "issues"]) {
+  $("pipeline-page").hidden = tab !== "pipeline";
+  for (const name of ["pipeline", "reports", "issues"]) {
     const active = name === tab;
-    $(name).hidden = !active;
+    if (name !== "pipeline") $(name).hidden = !active;
     $(name + "-tab").classList.toggle("selected", active);
     if (active) $(name + "-tab").setAttribute("aria-current", "page");
     else $(name + "-tab").removeAttribute("aria-current");
   }
+  showReportWorkspace();
+  if (tab === "pipeline") return;
   $("page-title").textContent = tab === "reports" ? "Daily reports" : "Exceptions";
   $("page-subtitle").textContent = tab === "reports" ? "Reconciliation results by business date." :
     "Inspect candidates and record review decisions.";
-  if (load) act(() => loadTab(true));
+  if (load) refresh();
 }
 
 async function loadTab(reset) {
+  if (state.tab === "pipeline") return;
   if (state.tab === "issues") return loadQueue(false);
   const ticket = ++state.reportLoad;
   const versions = await request("/api/reports?" + context());
@@ -344,13 +353,9 @@ async function act(action) {
 }
 
 function showDataset(dataset) {
-  if (state.dataset?.id !== dataset.id) {
-    $("pipeline").hidden = true;
-    $("run-pipeline").textContent = "Run reconciliation";
-    state.pipelineBusy = false;
-    updateDatasetButtons();
-  }
+  const changed = state.dataset?.id !== dataset.id;
   state.dataset = dataset;
+  if (changed) renderPipeline(null);
   const ledger = dataset.files.find((file) => file.kind === "ledger");
   const settlements = dataset.files.find((file) => file.kind === "settlement");
   $("dataset-summary").textContent = integer.format(ledger.rows) + " ledger rows · " +
@@ -363,31 +368,29 @@ function showDataset(dataset) {
     link.href = "/api/datasets/" + dataset.id + "/" + name;
     return link;
   }));
-  $("dataset").hidden = false;
+  $("dataset-downloads").hidden = false;
 }
 
 function updateDatasetButtons() {
-  $("run-pipeline").disabled = Boolean(state.pipelineBusy || state.generating);
+  $("run-pipeline").hidden = !state.dataset;
+  $("run-pipeline").disabled = Boolean(!state.dataset || state.pipelineBusy || state.generating);
   $("generate-dataset").disabled = Boolean(state.pipelineBusy || state.generating);
-  $("close-dataset").disabled = Boolean(state.pipelineBusy);
-  $("pipeline-shortcut").hidden = !state.dataset;
 }
 
 async function openPipelineReport(job, report, scroll = false) {
   switchTab("reports", false);
   await refresh({ scope: job.scope, day: report.business_date });
-  if (scroll) $("workspace").scrollIntoView({ behavior: "smooth" });
+  if (scroll) $("main").scrollIntoView();
 }
 
 function renderPipeline(job) {
-  state.pipelineBusy = job.status === "running";
+  state.pipelineBusy = job?.status === "running";
   updateDatasetButtons();
   $("run-pipeline").textContent = state.pipelineBusy ? "Reconciliation running…" :
-    job.status === "complete" ? "Run again" : "Retry reconciliation";
-  $("pipeline").hidden = false;
+    job?.status === "complete" ? "Run again" : job ? "Retry reconciliation" : "Run reconciliation";
   $("pipeline-steps").replaceChildren(...Object.entries(pipelineSteps).map(([key, label]) => {
-    const detail = job.steps[key];
-    const active = job.stage === key;
+    const detail = job?.steps[key];
+    const active = job?.stage === key;
     const status = active && job.status === "failed" ? "Failed" :
       active && state.pipelineBusy ? "Running" : detail ? "Complete" : "Waiting";
     const step = el("li");
@@ -396,15 +399,77 @@ function renderPipeline(job) {
     step.append(el("strong", label), el("span", status + (detail ? " · " + detail : "")));
     return step;
   }));
-  const status = job.error || (state.pipelineBusy ?
+  const status = !job ? "Waiting for a run." : job.error || (state.pipelineBusy ?
     pipelineSteps[job.stage] + " · " + job.steps[job.stage] :
-    job.reports.length + " daily reports ready. Choose a date to see the results.");
+    "Evaluation complete. " + job.reports.length + " daily reports ready.");
   if ($("pipeline-status").textContent !== status) $("pipeline-status").textContent = status;
-  $("pipeline-results").replaceChildren(...job.reports.map((report) => {
-    const button = el("button", "View " + dateLabel(report.business_date), "button quiet");
-    button.type = "button";
-    button.addEventListener("click", () => openPipelineReport(job, report, true));
-    return button;
+  const reports = job?.reports || [];
+  const reportIds = reports.map((report) => report.result_id).join(",");
+  if ($("pipeline-results").dataset.reports !== reportIds) {
+    $("pipeline-results").dataset.reports = reportIds;
+    $("pipeline-results").replaceChildren(...reports.map((report) => {
+      const button = el("button", "Report · " + dateLabel(report.business_date), "button quiet");
+      button.type = "button";
+      button.addEventListener("click", () => openPipelineReport(job, report, true));
+      return button;
+    }));
+  }
+  renderEvaluation(job?.evaluation);
+}
+
+function renderEvaluation(evaluation) {
+  $("evaluation").hidden = !evaluation;
+  if (!evaluation) {
+    $("evaluation-cases").open = false;
+    return;
+  }
+  const days = evaluation.business_dates;
+  $("evaluation-context").textContent = dateLabel(days[0]) + (days.length > 1 ?
+    " – " + dateLabel(days.at(-1)) : "") + " · Synthetic seed " + evaluation.seed;
+  const falseMatches = Object.values(evaluation.false_matches).reduce((total, count) => total + count, 0);
+  const breakdown = evaluation.false_matches;
+  $("evaluation-summary").replaceChildren(...[
+    ["False matches", falseMatches, [`${breakdown.exact} exact`, `${breakdown.diagnostic} amount check`,
+      `${breakdown.fuzzy} fuzzy`].join(" · ")],
+    ["Correct links", evaluation.true_links - evaluation.missed_true_links,
+      "of " + integer.format(evaluation.true_links) + " true links"],
+    ["Missed true links", evaluation.missed_true_links],
+  ].map(([label, value, description]) => {
+    const card = el("dl", null, "metric");
+    card.append(el("dt", label), el("dd", integer.format(value)));
+    if (description) card.append(el("dd", description, "metric-note"));
+    return card;
+  }));
+  $("evaluation-metrics").replaceChildren(...Object.entries(evaluation.error_metrics).map(([category, score]) => {
+    const row = el("tr");
+    const label = el("th", categories[category]);
+    label.scope = "row";
+    row.append(label);
+    for (const value of [score.precision, score.recall]) {
+      row.append(el("td", value === null ? "—" : percent.format(value)));
+    }
+    row.append(el("td", integer.format(score.tp)), el("td", integer.format(score.support)));
+    return row;
+  }));
+  $("evaluation-notes").textContent = integer.format(evaluation.excluded_invalid_rows) +
+    " invalid input rows excluded from scoring. — indicates no cases to calculate the rate.";
+  const misses = evaluation.misses;
+  const reasons = Object.entries(misses.reason_counts);
+  $("evaluation-reasons").replaceChildren(...(reasons.length ?
+    reasons.map(([reason, count]) => el("li", integer.format(count) + " · " + reason)) :
+    [el("li", "Every eligible true link was found.")]));
+  $("evaluation-cases").hidden = !misses.cases.length;
+  $("evaluation-case-list").replaceChildren(...misses.cases.map((item) => {
+    const entry = el("li");
+    entry.append(el("strong", item.label), el("p", item.detail),
+      el("p", "Ledger " + item.ledger + " · Expected settlement " + item.true_settlement, "case-identity"));
+    if (item.candidates.length) {
+      const candidates = el("ul", null, "case-candidates");
+      candidates.append(...item.candidates.map((candidate) => el("li",
+        candidate.ledger_reference + " → " + candidate.settlement_reference + " · " + candidate.score + "/100")));
+      entry.append(candidates);
+    }
+    return entry;
   }));
 }
 
@@ -421,7 +486,6 @@ async function followPipeline(job) {
       }
       renderPipeline(job);
     }
-    if (job.status === "complete") await openPipelineReport(job, job.reports[0]);
   } catch (error) {
     state.pipelineBusy = false;
     updateDatasetButtons();
@@ -470,20 +534,12 @@ async function generateDataset() {
 }
 
 for (const [key, label] of Object.entries(categories)) $("category").add(new Option(label, key));
+$("pipeline-tab").addEventListener("click", () => switchTab("pipeline"));
 $("reports-tab").addEventListener("click", () => switchTab("reports"));
 $("issues-tab").addEventListener("click", () => switchTab("issues"));
-$("refresh").addEventListener("click", () => refresh());
+$("refresh").addEventListener("click", () => state.tab === "pipeline" ? start() : refresh());
 $("generate-dataset").addEventListener("click", generateDataset);
 $("run-pipeline").addEventListener("click", runPipeline);
-$("pipeline-shortcut").addEventListener("click", () => {
-  $("dataset").hidden = false;
-  $("run-pipeline").focus();
-});
-$("close-dataset").addEventListener("click", () => {
-  $("dataset").hidden = true;
-  notice("dataset-status", "");
-  $("pipeline-shortcut").focus();
-});
 $("scope").addEventListener("change", () => { fillDays(); act(() => loadTab(true)); });
 $("day").addEventListener("change", () => act(() => loadTab(true)));
 $("snapshot").addEventListener("change", () => act(loadReport));
@@ -506,34 +562,25 @@ async function start() {
       return;
     }
   }
+  if (state.generating || state.following) return;
   state.generating = true;
   updateDatasetButtons();
   try {
     const dataset = await request("/api/datasets/current");
     if (dataset) showDataset(dataset);
     const job = await request("/api/pipeline");
-    if (job && job.dataset_id === state.dataset?.id) {
-      if (job.status === "complete") {
-        await followPipeline(job);
-        return;
-      }
-      if (job.status === "running") {
-        state.generating = false;
-        await refresh();
-        await followPipeline(job);
-        return;
-      }
-      renderPipeline(job);
-    }
+    await refresh();
+    if (job && job.dataset_id === state.dataset?.id) await followPipeline(job);
   } catch (error) {
-    if (error.status !== 401) notice("dataset-status", error.message);
+    connection(error.status === 401 ? "Sign-in needed" : "Disconnected", false);
+    notice("dataset-status", error.message);
   } finally {
     state.generating = false;
     updateDatasetButtons();
   }
-  await refresh();
 }
 window.addEventListener("hashchange", () => {
   if (new URLSearchParams(location.hash.slice(1)).has("access")) start();
 });
+renderPipeline(null);
 start();

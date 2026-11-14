@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from reconciliation.contracts import InvalidRow, amount, local_date, timestamp
-from reconciliation.evaluation import metrics
+from reconciliation.evaluation import explain_misses, metrics
 from reconciliation.generator import generate
 
 
@@ -42,6 +42,29 @@ def test_generator_repeats_exact_bytes_and_separates_truth(tmp_path):
 
 def test_zero_denominators_are_undefined():
     assert metrics(set(), set()) == dict(tp=0, fp=0, fn=0, support=0, precision=None, recall=None)
+
+
+def test_explain_misses_distinguishes_fuzzy_rules_from_missing_evidence():
+    misses = [
+        {"ledger": "A", "true_settlement": "X", "reason": "below_score_or_reciprocal_margin"},
+        {"ledger": "B", "true_settlement": "Y", "reason": "below_score_or_reciprocal_margin"},
+        {"ledger": "C", "true_settlement": "Z", "reason": "no_eligible_or_retained_candidate"},
+        {"ledger": "D", "true_settlement": "W", "reason": "different_link"},
+    ]
+    evidence = {
+        "A": {"candidates": [{"ledger": "A", "settlement": "X", "score": 93},
+                             {"ledger": "other", "settlement": "X", "score": 93}]},
+        "B": {"candidates": [{"ledger": "B", "settlement": "Y", "score": 75}]},
+    }
+    result = explain_misses({"missed_true_links": misses, "abstentions": evidence,
+                             "all_incorrect_links": [{"ledger": "D", "method": "fuzzy"}]}, 80, 6)
+    assert result["reason_counts"] == {
+        "Tied candidates": 1, "Reference score too low": 1,
+        "No candidate retained": 1, "Wrong settlement linked": 1,
+    }
+    assert "93/100" in result["cases"][0]["detail"] and "6 points" in result["cases"][0]["detail"]
+    assert "75/100" in result["cases"][1]["detail"] and "80" in result["cases"][1]["detail"]
+    assert "can't identify" in result["cases"][2]["detail"]
 
 
 def test_isolated_matcher_imports_only_runtime_files():

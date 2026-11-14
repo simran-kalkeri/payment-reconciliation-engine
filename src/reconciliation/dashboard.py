@@ -236,7 +236,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def read_api(self, path, params):
         db = self.server.db
         if path == "/api/pipeline":
-            return self.send_json(200, self.server.pipeline.snapshot())
+            return self.send_json(200, self.pipeline_status())
         if path == "/api/datasets/current":
             with self.server.dataset_lock:
                 dataset = current_dataset(self.server.dataset_root)
@@ -267,6 +267,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 raise RequestError(404, "Exception not found.") from exc
             return self.send_json(200, {"issue": issue, "history": audit})
         raise RequestError(404, "Page not found.")
+
+    def pipeline_status(self):
+        with self.server.dataset_lock:
+            root = self.server.dataset_root
+            dataset = current_dataset(root)
+            if not dataset:
+                return None
+            job = self.server.pipeline.snapshot()
+            if job and job["dataset_id"] == dataset["id"]:
+                return job
+            saved = root / dataset["id"] / "pipeline-result.json"
+            try:
+                return json.loads(saved.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                return None
 
     def generate_dataset(self):
         root = self.server.dataset_root
