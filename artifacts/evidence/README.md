@@ -1,6 +1,6 @@
 # Verification evidence
 
-The run used Python 3.14.4 and native PostgreSQL 17.12 on Windows. A fresh virtual environment installed from the lockfile, passed `pip check`, and exposed the `reconcile` CLI. The [test report](test-results.xml) records the unit and real PostgreSQL cases. The Compose configuration passed validation. The local Docker Linux engine did not become available, so the Compose container run was delegated to the repository's verification workflow.
+The artifacts below came from Python 3.14.4 and native PostgreSQL 17.12 on Windows. A fresh virtual environment installed from the lockfile and passed `pip check`. The test report records 32 passing tests, including 18 that used real PostgreSQL. The GitHub Actions workflow also passed the PostgreSQL suite and completed the full demo with the matcher in its restricted Compose container. [Local test report](test-results.xml) · [Verified Compose run](https://github.com/simran-kalkeri/payment-reconciliation-engine/actions/runs/43580549621)
 
 | Deliverable | Evidence |
 | --- | --- |
