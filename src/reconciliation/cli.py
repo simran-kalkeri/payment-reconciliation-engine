@@ -110,6 +110,16 @@ def files():
     print_json(operations.file_status(engine()))
 
 
+@app.command()
+def dashboard(port: int = typer.Option(8765, min=1, max=65535), link_file: Path | None = None,
+              open_browser: bool = typer.Option(False, help="Open the dashboard in your default browser."),
+              local_demo: bool = typer.Option(False, "--local-demo",
+                                              help="Skip sign-in for a trusted local demo with sample data.")):
+    """Serve the report and review dashboard on this computer."""
+    from .dashboard import serve
+    serve(engine(), port, link_file, open_browser=open_browser, local_demo=local_demo)
+
+
 @issues.command("list")
 def issue_list(scope: str | None = None, day: str | None = None, category: str | None = None,
                status: str | None = None, merchant: str | None = None,

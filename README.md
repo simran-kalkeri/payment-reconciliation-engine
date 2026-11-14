@@ -29,6 +29,16 @@ The default host demo uses a trusted operator process. For a restricted matcher,
 
 The full host demo and real PostgreSQL suite ran on native PostgreSQL 17.12. The restricted matcher entry point and PostgreSQL grants were exercised separately. See the [verification evidence](artifacts/evidence/README.md) for environment and test results.
 
+## Local dashboard
+
+For the portable Windows demo already installed in `.local`, run `.\dashboard.cmd` from the repository folder. It starts PostgreSQL if needed and opens [localhost:8765](http://localhost:8765/) without a sign-in link. Anyone with access to this computer can use this mode. Use it with sample data.
+
+For other setups, start PostgreSQL, set `RECON_DATABASE_URL`, and run `reconcile dashboard --open-browser`. The default address is `http://127.0.0.1:8765/`. Use `--port` if that port is occupied. Leave the terminal running while you use the dashboard and press Ctrl+C to stop it.
+
+Choose a scope, business date, and snapshot in **Daily reports**. Download reports as JSON, CSV, or Markdown. In **Exceptions**, filter the queue and select **Review** to inspect matching evidence, source rows, and audit history. Resolve or reopen a case by entering an operator name and reason. If the case has changed, reload it before submitting.
+
+The server listens only on this computer. Outside local demo mode, the dashboard signs your browser in with a new private link each time it starts. If the browser does not open automatically, use the link printed in the running terminal. The operator name is recorded as an audit label.
+
 ## Operator commands
 
 | Task | Example |

@@ -101,13 +101,9 @@ def atomic_write(path, value):
         temp.unlink(missing_ok=True)
 
 
-def export(directory, report, evidence=None):
+def render_report(report):
     from io import StringIO
 
-    directory = Path(directory)
-    # Store each attempt separately so an incomplete replay cannot replace a completed export.
-    version = directory / f"run-{report['run_id']}"
-    version.mkdir(parents=True, exist_ok=True)
     status = report["status"]
     rows = []
     for key, value in report.items():
@@ -121,13 +117,22 @@ def export(directory, report, evidence=None):
     writer = csv.writer(csv_text, lineterminator="\n")
     writer.writerow(("field", "value"))
     writer.writerows(rows)
-    atomic_write(version / "report.csv", csv_text.getvalue())
     lines = [f"# {status.upper()} reconciliation for {report['business_date']}", "",
              "Monetary measures use INR paise. Exposure categories can overlap.", "",
              "| Field | Value |", "| --- | --- |"]
     lines.extend(f"| {key} | {str(value).replace('|', '&#124;').replace(chr(10), ' ')} |" for key, value in rows)
-    atomic_write(version / "report.md", "\n".join(lines) + "\n")
+    return {"csv": csv_text.getvalue(), "md": "\n".join(lines) + "\n",
+            "json": json.dumps(report, sort_keys=True, indent=2, ensure_ascii=True) + "\n"}
+
+
+def export(directory, report, evidence=None):
+    # Store each attempt separately so an incomplete replay cannot replace a completed export.
+    version = Path(directory) / f"run-{report['run_id']}"
+    version.mkdir(parents=True, exist_ok=True)
+    rendered = render_report(report)
+    for extension in ("csv", "md"):
+        atomic_write(version / f"report.{extension}", rendered[extension])
     if evidence is not None:
         json_file(version / "result.json", {"report": report, **evidence})
-    json_file(version / "report.json", report)
+    atomic_write(version / "report.json", rendered["json"])
     return version
