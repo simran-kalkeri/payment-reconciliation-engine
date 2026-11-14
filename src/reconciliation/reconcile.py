@@ -33,7 +33,7 @@ def inputs(conn, ids, cutoff):
     return ledger, settlement
 
 
-def reconcile(db, scope, day, cutoff, rules, file_ids, sources_complete, *, before_publish=None):
+def reconcile(db, scope, day, cutoff, rules, file_ids, sources_complete, *, before_publish=None, progress=None):
     scope_id(scope)
     if cutoff.tzinfo is None:
         raise ValueError("Cutoff requires a UTC offset")
@@ -78,7 +78,9 @@ def reconcile(db, scope, day, cutoff, rules, file_ids, sources_complete, *, befo
                             pending_rows=sum(row["status"] == "pending" for row in quality)), None
             context_hash = digest(header)
             ledger, settlement = inputs(conn, ids, cutoff)
-            focal, scoped, links, issues, pending = classify(day, cutoff, ledger, settlement, rules)
+            focal, scoped, links, issues, pending = classify(day, cutoff, ledger, settlement, rules, progress=progress)
+            if progress:
+                progress("publish")
             for row in quality:
                 if row["status"] != "rejected":
                     continue

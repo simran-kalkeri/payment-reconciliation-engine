@@ -82,7 +82,7 @@ def retry_db(call, attempts=4, pause=0.25):
             time.sleep(pause * 2 ** (attempt - 1))
 
 
-def work(db, worker="local", size=250, file_ids=None, watch=False):
+def work(db, worker="local", size=250, file_ids=None, watch=False, *, progress=None):
     scope_id(worker)
     if size < 1:
         raise ValueError("Batch size must be positive")
@@ -92,6 +92,8 @@ def work(db, worker="local", size=250, file_ids=None, watch=False):
         while True:
             processed = retry_db(lambda: batch(db, worker, size, file_ids, run_id=run))
             counts.update(processed)
+            if processed and progress:
+                progress(dict(counts))
             if time.monotonic() >= next_heartbeat:
                 retry_db(lambda: heartbeat(db, run))
                 next_heartbeat = time.monotonic() + 5

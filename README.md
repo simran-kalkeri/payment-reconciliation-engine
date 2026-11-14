@@ -37,6 +37,12 @@ For other setups, start PostgreSQL, set `RECON_DATABASE_URL`, and run `reconcile
 
 Choose a scope, business date, and snapshot in **Daily reports**. Download reports as JSON, CSV, or Markdown. In **Exceptions**, filter the queue and select **Review** to inspect matching evidence, source rows, and audit history. Resolve or reopen a case by entering an operator name and reason. If the case has changed, reload it before submitting.
 
+Click **Generate dataset** to create and download a ledger CSV, a settlement CSV and a manifest. The answer key is saved separately and is available as its own download for evaluation. Each click uses a fresh seed. Once the new files are ready, they replace the previous dashboard bundle in `artifacts/work/dashboard-datasets/`. Files you already downloaded stay on your computer. To reproduce a dashboard bundle, run `reconcile generate artifacts/work/inputs artifacts/work/truth --two-files --seed SEED`. Add `--merchant-profiles` when the manifest's configuration includes `"merchant_profiles": true`. Those bundles use merchant-specific payment amounts and fee rates, several settlement batches and uneven daily volumes. These are synthetic assumptions.
+
+After generating a dataset, click **Run reconciliation**. The dashboard shows live progress as the engine reads both CSVs, stages them in PostgreSQL, validates rows, matches transactions, and publishes each day's report and exceptions. It opens the first daily report when finished. Pick another date in the progress panel or in **Daily reports**. Click **Run again** to replay the same dataset. Published reports and review history remain available in their dataset scope when you generate new inputs.
+
+Run `reconcile migrate` before processing the mixed date layout. For CLI ingestion, use the manifest's source and date format with each file. The settlement CSV declares `--date-format mixed`. Score exported results separately using the answer key.
+
 The server listens only on this computer. Outside local demo mode, the dashboard signs your browser in with a new private link each time it starts. If the browser does not open automatically, use the link printed in the running terminal. The operator name is recorded as an audit label.
 
 ## Operator commands

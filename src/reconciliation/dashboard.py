@@ -1,26 +1,42 @@
 """Loopback dashboard for an operator with access to this checkout."""
 
 import json
+import os
 import re
 import secrets
+import socket
 import webbrowser
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from shutil import rmtree
+from tempfile import TemporaryDirectory
+from threading import Lock
 from urllib.parse import parse_qs, urlsplit
+from uuid import uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from . import workbench
 from .contracts import CATEGORIES, scope_id
+from .dashboard_pipeline import DashboardPipeline
 from .db import event, query
-from .reporting import atomic_write, render_report
+from .generator import generate
+from .reporting import atomic_write, json_file, render_report
+from .storage import LocalStore
 
 ASSETS = Path(__file__).with_name("web")
 STATIC = {"/": ("index.html", "text/html"), "/dashboard.css": ("dashboard.css", "text/css"),
           "/dashboard.js": ("dashboard.js", "text/javascript")}
 FORMATS = {"json": "application/json", "csv": "text/csv", "md": "text/markdown"}
 ID = r"([1-9][0-9]{0,18})"
+DATASET_ID = r"[a-f0-9]{32}"
+DATASET_FILE = {
+    "ledger.csv": ("inputs", "text/csv"),
+    "settlements.csv": ("inputs", "text/csv"),
+    "manifest.json": ("inputs", "application/json"),
+    "answer_key.json": ("truth", "application/json"),
+}
 
 
 class RequestError(ValueError):
@@ -84,10 +100,36 @@ def browser_numbers(value):
     return value
 
 
+def current_dataset(root):
+    try:
+        return json.loads((root / "current.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+
+
+def remove_previous_datasets(root, current_id):
+    cleanup_pending = False
+    for bundle in root.iterdir():
+        if (bundle.name == current_id or not re.fullmatch(DATASET_ID, bundle.name)
+                or not bundle.is_dir() or bundle.resolve() != bundle):
+            continue
+        # Only remove generator bundles directly inside the resolved dataset root.
+        try:
+            rmtree(bundle)
+        except OSError as exc:
+            cleanup_pending = True
+            event("dashboard-dataset", status="cleanup-pending", error=type(exc).__name__)
+    return cleanup_pending
+
+
 class DashboardServer(ThreadingHTTPServer):
-    def __init__(self, db, port, *, local_demo=False):
+    def __init__(self, db, port, *, local_demo=False, dataset_root=Path("artifacts/work/dashboard-datasets"),
+                 raw_root=None):
         self.db = db
         self.local_demo = local_demo
+        self.dataset_root = dataset_root.resolve()
+        self.dataset_lock = Lock()
+        self.pipeline = DashboardPipeline(db, LocalStore(raw_root or os.getenv("RECON_RAW_DIR", "artifacts/work/raw")))
         self.access_key = None if local_demo else secrets.token_urlsafe(32)
         self.session = None if local_demo else secrets.token_urlsafe(32)
         super().__init__(("127.0.0.1", port), DashboardHandler)
@@ -95,6 +137,13 @@ class DashboardServer(ThreadingHTTPServer):
         self.origin = f"http://{self.host}"
         self.localhost = f"localhost:{self.server_port}"
         self.cookie_name = f"recon_dashboard_{self.server_port}"
+
+    def server_bind(self):
+        if os.name == "nt":
+            # SO_REUSEADDR alone allows two Windows listeners on the same port.
+            self.allow_reuse_address = False
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
     @property
     def access_url(self):
@@ -153,6 +202,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if not any(self.matches(part[len(name):], self.server.session) for part in cookies if part.startswith(name)):
                     raise RequestError(401, "Open the access link printed by the dashboard command.")
             if self.command == "POST":
+                if target.path == "/api/datasets":
+                    return self.generate_dataset()
+                if route := re.fullmatch(rf"/api/datasets/({DATASET_ID})/reconcile", target.path):
+                    return self.start_pipeline(route[1])
                 return self.update_review(target.path, body)
             params = {key: values[-1] for key, values in parse_qs(target.query, max_num_fields=16).items()}
             self.read_api(target.path, params)
@@ -163,6 +216,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except SQLAlchemyError as exc:
             event("dashboard", error=type(exc).__name__)
             self.send_json(503, {"error": "PostgreSQL is unavailable. Check the local database and try again."})
+        except OSError as exc:
+            event("dashboard", error=type(exc).__name__)
+            self.send_json(500, {"error": "Could not read or save a dashboard file. Check the local disk and try again."})
 
     @staticmethod
     def matches(value, expected):
@@ -179,6 +235,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def read_api(self, path, params):
         db = self.server.db
+        if path == "/api/pipeline":
+            return self.send_json(200, self.server.pipeline.snapshot())
+        if path == "/api/datasets/current":
+            with self.server.dataset_lock:
+                dataset = current_dataset(self.server.dataset_root)
+            return self.send_json(200, dataset)
+        if route := re.fullmatch(rf"/api/datasets/({DATASET_ID})/([a-z_.]+)", path):
+            return self.download_dataset(*route.groups())
         if path == "/api/reports":
             scope = scope_id(params["scope"]) if "scope" in params else None
             day = date.fromisoformat(params.get("day", "")) if scope is not None else None
@@ -203,6 +267,56 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 raise RequestError(404, "Exception not found.") from exc
             return self.send_json(200, {"issue": issue, "history": audit})
         raise RequestError(404, "Page not found.")
+
+    def generate_dataset(self):
+        root = self.server.dataset_root
+        if not self.server.dataset_lock.acquire(blocking=False):
+            raise RequestError(409, "The dataset is busy. Try again in a moment.")
+        dataset_id = uuid4().hex
+        try:
+            job = self.server.pipeline.snapshot()
+            if job and job["status"] == "running":
+                raise RequestError(409, "Wait for reconciliation to finish before generating a new dataset.")
+            root.mkdir(parents=True, exist_ok=True)
+            previous = current_dataset(root)
+            seed = secrets.randbits(48)
+            while previous and seed == previous["seed"]:
+                seed = secrets.randbits(48)
+            with TemporaryDirectory(dir=root) as temp:
+                bundle = Path(temp) / "dataset"
+                manifest = generate(bundle / "inputs", bundle / "truth", seed, two_files=True, merchant_profiles=True)
+                bundle.rename(root / dataset_id)
+            dataset = {"id": dataset_id, "seed": seed, "files": manifest["files"]}
+            json_file(root / "current.json", dataset)
+            cleanup_pending = remove_previous_datasets(root, dataset_id)
+        finally:
+            self.server.dataset_lock.release()
+        self.send_json(201, {**dataset, "cleanup_pending": cleanup_pending})
+
+    def start_pipeline(self, dataset_id):
+        with self.server.dataset_lock:
+            root = self.server.dataset_root
+            dataset = current_dataset(root)
+            if not dataset or dataset["id"] != dataset_id:
+                raise RequestError(404, "This dataset is no longer available. Refresh for the latest dataset.")
+            job = self.server.pipeline.start(dataset, root / dataset_id / "inputs")
+        self.send_json(202, job)
+
+    def download_dataset(self, dataset_id, name):
+        if name not in DATASET_FILE:
+            raise RequestError(404, "Dataset file not found.")
+        directory, content_type = DATASET_FILE[name]
+        with self.server.dataset_lock:
+            root = self.server.dataset_root
+            dataset = current_dataset(root)
+            if not dataset or dataset["id"] != dataset_id:
+                raise RequestError(404, "This dataset is no longer available. Refresh for the latest downloads.")
+            path = root / dataset_id / directory / name
+            try:
+                payload = path.read_bytes()
+            except FileNotFoundError as exc:
+                raise RequestError(404, "Dataset file not found. Generate a dataset first.") from exc
+        self.send_data(200, payload, content_type, filename=name)
 
     def update_review(self, path, body):
         route = re.fullmatch(rf"/api/issues/{ID}/review", path)
@@ -252,7 +366,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
 
 def serve(db, port, link_file=None, *, open_browser=False, local_demo=False):
-    with DashboardServer(db, port, local_demo=local_demo) as server:
+    try:
+        server = DashboardServer(db, port, local_demo=local_demo)
+    except OSError as exc:
+        if getattr(exc, "winerror", None) in {10013, 10048}:
+            raise SystemExit(f"Cannot listen on port {port}. If the dashboard is already running, stop it before restarting.") from None
+        raise
+    with server:
         if link_file is not None:
             link_file.parent.mkdir(parents=True, exist_ok=True)
             atomic_write(link_file, server.access_url + "\n")

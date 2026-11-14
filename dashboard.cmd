@@ -14,6 +14,8 @@ if errorlevel 1 (
 )
 
 set "RECON_DATABASE_URL=postgresql+psycopg://recon_local@127.0.0.1:55432/recon_final"
+".local\clean-venv\Scripts\reconcile.exe" migrate
+if errorlevel 1 exit /b 1
 ".local\clean-venv\Scripts\reconcile.exe" dashboard --local-demo --open-browser
 exit /b %errorlevel%
 

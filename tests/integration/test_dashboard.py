@@ -1,16 +1,21 @@
 import csv
 import http.client
 import json
+from contextlib import closing
+from hashlib import sha256
 from datetime import date, timedelta
-from threading import Thread
+from threading import Event, Thread
+from time import monotonic, sleep
 
 import pytest
 
 from reconciliation.contracts import FIELDS, local_start
 from reconciliation.dashboard import DashboardServer
+from reconciliation.generator import generate
 from reconciliation.ingestion import ingest
 from reconciliation.matching import Rules
 from reconciliation.normalization import work
+from reconciliation.operations import counts
 from reconciliation.reconcile import reconcile
 from reconciliation.storage import LocalStore
 
@@ -35,7 +40,8 @@ def test_dashboard_reads_reports_and_reviews_with_existing_audit(database, tmp_p
     work(database)
     early, _ = reconcile(database, "local", day, local_start(day), Rules(), files, True)
     report, _ = reconcile(database, "local", day, local_start(day + timedelta(days=2)), Rules(), files, True)
-    with DashboardServer(database, 0, local_demo=local_demo) as server:
+    datasets = tmp_path / "datasets"
+    with DashboardServer(database, 0, local_demo=local_demo, dataset_root=datasets) as server:
         worker = Thread(target=server.serve_forever, daemon=True)
         worker.start()
         cookie = None
@@ -67,6 +73,7 @@ def test_dashboard_reads_reports_and_reviews_with_existing_audit(database, tmp_p
                 assert send("/api/reports")[0] == 200
             else:
                 assert send("/api/reports")[0] == 401
+                assert send("/api/datasets", {})[0] == 401
                 assert send("/api/session", {"key": "wrong"})[0] == 401
                 status, _, headers = send("/api/session", {"key": server.access_key})
                 assert status == 200 and "SameSite=Strict" in headers["Set-Cookie"]
@@ -74,6 +81,39 @@ def test_dashboard_reads_reports_and_reviews_with_existing_audit(database, tmp_p
             assert send("/api/reports", headers={"Host": "unrelated.example"})[0] == 403
             assert send("/api/reports", headers={"Sec-Fetch-Site": "cross-site"})[0] == 403
             assert send("/api/reports", headers={"Origin": "http://unrelated.example"})[0] == 403
+            assert send("/api/datasets", {}, origin=False)[0] == 403
+            if local_demo:
+                status, dataset, _ = send("/api/datasets", {})
+                assert status == 201
+                route = f"/api/datasets/{dataset['id']}"
+                bundle = datasets / dataset["id"]
+                assert {file["name"] for file in dataset["files"]} == {"ledger.csv", "settlements.csv"}
+                assert sum(file["rows"] for file in dataset["files"]) >= 10_000
+                for file in dataset["files"]:
+                    status, content, headers = send(f"{route}/{file['name']}")
+                    assert status == 200 and "attachment" in headers["Content-Disposition"]
+                    assert sha256(content.encode("utf-8")).hexdigest() == file["sha256"]
+                manifest = send(f"{route}/manifest.json")[1]
+                assert manifest["files"] == dataset["files"]
+                assert manifest["configuration"]["merchant_profiles"] is True
+                answer = send(f"{route}/answer_key.json")[1]
+                assert {label for row in answer["rows"] for label in row["labels"]} == {
+                    "missing_settlement", "duplicate_settlement", "amount_mismatch", "late_settlement",
+                    "reference_mismatch",
+                }
+                assert list((bundle / "truth").iterdir()) == [bundle / "truth" / "answer_key.json"]
+                assert not (bundle / "inputs" / "answer_key.json").exists()
+                settlement_file = next(file for file in dataset["files"] if file["kind"] == "settlement")
+                assert settlement_file["date_format"] == "mixed"
+                with (bundle / "inputs" / settlement_file["name"]).open(newline="", encoding="utf-8") as stream:
+                    settlements = list(csv.DictReader(stream))
+                assert len({row["available_at"][11:13] for row in settlements if "T" in row["available_at"]}) > 2
+                assert len({row["fee"] for row in settlements}) > 7
+                settlement_id = ingest(database, store, bundle / "inputs" / settlement_file["name"],
+                                       settlement_file["kind"], settlement_file["source"], "mixed")
+                assert work(database, file_ids=[settlement_id]) == {
+                    "accepted": settlement_file["rows"] - 4, "rejected": 4,
+                }
             versions = send("/api/reports?scope=local&day=2025-05-12")[1]
             assert [(item["id"], item["current"]) for item in versions] == [
                 (report["result_id"], True), (early["result_id"], False)]
@@ -95,5 +135,140 @@ def test_dashboard_reads_reports_and_reviews_with_existing_audit(database, tmp_p
                                          "version": case["version"] + 1})[1]["review_status"] == "open"
             assert [row["action"] for row in send(path)[1]["history"]] == ["detected", "resolve", "reopen"]
         finally:
+            server.shutdown()
+            worker.join(5)
+
+
+def test_dataset_regeneration_replaces_previous_bundle(tmp_path, monkeypatch):
+    root = tmp_path / "datasets"
+    root.mkdir()
+    (root / "unrelated").mkdir()
+    with DashboardServer(None, 0, local_demo=True, dataset_root=root) as server:
+        worker = Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+
+        def send(path, *, generate=False):
+            with_connection = http.client.HTTPConnection(server.host, timeout=10)
+            try:
+                with_connection.request(
+                    "POST" if generate else "GET", path, body="{}" if generate else None,
+                    headers={"Origin": server.origin, "Content-Type": "application/json"} if generate else {},
+                )
+                response = with_connection.getresponse()
+                data = response.read()
+                if response.getheader("Content-Type").startswith("application/json"):
+                    data = json.loads(data)
+                return response.status, data
+            finally:
+                with_connection.close()
+
+        try:
+            assert send("/api/datasets/current") == (200, None)
+            status, first = send("/api/datasets", generate=True)
+            assert status == 201
+            first_route = f"/api/datasets/{first['id']}"
+
+            def fail_generation(*args, **kwargs):
+                raise OSError("Simulated disk error")
+
+            with monkeypatch.context() as failure:
+                failure.setattr("reconciliation.dashboard.generate", fail_generation)
+                assert send("/api/datasets", generate=True)[0] == 500
+            assert send("/api/datasets/current")[1]["id"] == first["id"]
+            assert send(first_route + "/ledger.csv")[0] == 200
+
+            status, second = send("/api/datasets", generate=True)
+            assert status == 201
+            assert second["seed"] != first["seed"]
+            hashes = {file["name"]: file["sha256"] for file in first["files"]}
+            assert all(file["sha256"] != hashes[file["name"]] for file in second["files"])
+            assert not second["cleanup_pending"]
+            assert not (root / first["id"]).exists()
+            assert (root / "unrelated").is_dir()
+            assert send(first_route + "/answer_key.json")[0] == 404
+            assert send("/api/datasets/current")[1]["id"] == second["id"]
+            assert send(f"/api/datasets/{second['id']}/answer_key.json")[1]["seed"] == second["seed"]
+        finally:
+            server.shutdown()
+            worker.join(5)
+
+
+def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path, monkeypatch):
+    entered_validation = Event()
+    continue_validation = Event()
+
+    def pause_at_validation(*args, **kwargs):
+        entered_validation.set()
+        if not continue_validation.wait(10):
+            raise RuntimeError("Test did not release the worker")
+        return work(*args, **kwargs)
+
+    monkeypatch.setattr("reconciliation.dashboard_pipeline.work", pause_at_validation)
+
+    def generate_test_dataset(inputs, truth, seed, **options):
+        return generate(inputs, truth, seed, count=160, per_category=5, **options)
+
+    monkeypatch.setattr("reconciliation.dashboard.generate", generate_test_dataset)
+    root = tmp_path / "datasets"
+    raw = tmp_path / "raw"
+    with DashboardServer(database, 0, local_demo=True, dataset_root=root, raw_root=raw) as server:
+        worker = Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+
+        def send(path, *, post=False):
+            with closing(http.client.HTTPConnection(server.host, timeout=10)) as connection:
+                headers = {"Origin": server.origin, "Content-Type": "application/json"} if post else {}
+                connection.request("POST" if post else "GET", path, body="{}" if post else None, headers=headers)
+                response = connection.getresponse()
+                return response.status, json.loads(response.read())
+
+        def finished():
+            deadline = monotonic() + 45
+            while monotonic() < deadline:
+                status, job = send("/api/pipeline")
+                assert status == 200
+                if job["status"] != "running":
+                    return job
+                sleep(0.05)
+            pytest.fail(f"The reconciliation job did not finish. Last status: {job}")
+
+        try:
+            status, dataset = send("/api/datasets", post=True)
+            assert status == 201
+            route = f"/api/datasets/{dataset['id']}/reconcile"
+            (root / dataset["id"] / "truth" / "answer_key.json").unlink()
+
+            assert send(route, post=True)[0] == 202
+            assert entered_validation.wait(10)
+            status, progress = send("/api/pipeline")
+            assert status == 200 and progress["stage"] == "validate"
+            assert progress["status"] == "running" and not progress["reports"]
+            assert set(progress["steps"]) == {"read", "stage", "validate"}
+            assert send(route, post=True)[1] == progress
+            assert send("/api/datasets", post=True)[0] == 409
+            continue_validation.set()
+
+            first = finished()
+            assert first["status"] == "complete", first
+            assert set(first["steps"]) == {"read", "stage", "validate", "match", "publish"}
+            assert len(first["reports"]) == 3
+            assert len(list(raw.glob("*/*"))) == 2
+            assert len(send("/api/reports")[1]) == 3
+            for item in first["reports"]:
+                status, report = send(f"/api/reports/{item['result_id']}")
+                assert status == 200 and report["scope"] == first["scope"]
+                assert report["business_date"] == item["business_date"]
+                assert report["ledger_matched"] > 0 and report["rejected_rows"] == 8
+                assert all(report["conservation"].values())
+            day = first["reports"][0]["business_date"]
+            assert send(f"/api/issues?scope={first['scope']}&day={day}")[1]["issues"]
+            before = counts(database)
+            assert send(route, post=True)[0] == 202
+            replay = finished()
+            assert replay["status"] == "complete", replay
+            assert replay["reports"] == first["reports"]
+            assert counts(database) == before
+        finally:
+            continue_validation.set()
             server.shutdown()
             worker.join(5)

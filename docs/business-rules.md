@@ -2,7 +2,7 @@
 
 ## Input contract
 
-Schema version 1 uses UTF-8 CSV with a header. Column order may vary. The file declaration supplies its kind, source and one date format.
+Schema version 1 uses UTF-8 CSV with a header. Column order may vary. The file declaration supplies its kind, source and date format.
 
 | Kind | Required columns |
 | --- | --- |
@@ -15,7 +15,7 @@ Required fields are trimmed. References additionally use uppercase and remove wh
 
 INR uses 100 paise per rupee. Amount fields require decimal text with at most two fractional digits. Missing fees and excess precision are quarantined. Gross must be positive, and net and fee must be nonnegative. Refunds, reversals and unsupported currencies are quarantined. The comparison uses settlement gross = net + declared fee. Stored and reported amounts are integers.
 
-Date formats are `iso` (`YYYY-MM-DD`), `dmy` (`DD/MM/YYYY`) and `named` (`DD-MMM-YYYY` with an uppercase English month). A source must declare the format. Business days use Asia/Kolkata. `available_at` and the run cutoff require seconds and a UTC offset. PostgreSQL stores instants as `timestamptz`. A deadline date is inclusive until the start of the next local day. Missing is eligible at that instant plus configured grace. A date-only settlement counts as late when its local day starts at or after that boundary. The default grace is zero. Weekends and holidays follow ordinary calendar days.
+Date formats are `iso` (`YYYY-MM-DD`), `dmy` (`DD/MM/YYYY`) and `named` (`DD-MMM-YYYY` with an uppercase English month). Declare `mixed` when a file uses more than one of these formats. Slash-separated dates always use day/month/year. Business days use Asia/Kolkata. `available_at` and the run cutoff require seconds and a UTC offset. PostgreSQL stores instants as `timestamptz`. A deadline date is inclusive until the start of the next local day. Missing is eligible at that instant plus configured grace. A date-only settlement counts as late when its local day starts at or after that boundary. The default grace is zero. Weekends and holidays follow ordinary calendar days.
 
 ## Matching and exception lifecycle
 

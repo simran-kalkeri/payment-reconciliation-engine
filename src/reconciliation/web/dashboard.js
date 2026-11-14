@@ -2,6 +2,10 @@
 
 const $ = (id) => document.getElementById(id);
 const state = { reports: [], tab: "reports", cursor: null, issue: null, reportLoad: 0, queueLoad: 0 };
+const pipelineSteps = {
+  read: "Read input files", stage: "Extract and stage rows", validate: "Validate and normalize",
+  match: "Exact and fuzzy matching", publish: "Publish reports and exceptions",
+};
 const categories = {
   missing_settlement: "Missing settlement", duplicate_settlement: "Duplicate settlement",
   amount_mismatch: "Amount mismatch", late_settlement: "Late settlement",
@@ -60,6 +64,10 @@ async function request(path, body) {
   const data = await response.json();
   if (!response.ok) {
     const error = new Error(data.error || "The dashboard could not complete the request.");
+    if (response.status === 404 && data.error === "Page not found." &&
+        (path === "/api/pipeline" || path.endsWith("/reconcile"))) {
+      error.message = "This dashboard server needs a restart. Stop it in the terminal, then run .\\dashboard.cmd again.";
+    }
     error.status = response.status;
     throw error;
   }
@@ -76,7 +84,7 @@ function connection(label, connected) {
   $("connection-dot").classList.toggle("ready", connected);
 }
 
-async function refresh() {
+async function refresh(selection) {
   $("refresh").disabled = true;
   notice("notice", "");
   try {
@@ -84,12 +92,13 @@ async function refresh() {
     connection("Local database connected", true);
     $("workspace").hidden = !state.reports.length;
     $("empty").hidden = !!state.reports.length;
-    $("empty").textContent = "No published reports. Run reconcile demo from your terminal, then refresh.";
+    $("empty").textContent = "No published reports. Generate a dataset and run reconciliation to see results here.";
     if (!state.reports.length) return;
     const scopes = [...new Set(state.reports.map((report) => report.scope))];
     scopes.sort((a, b) => (a === "evaluation" ? -1 : b === "evaluation" ? 1 : a.localeCompare(b)));
-    selectOptions($("scope"), scopes.map((scope) => [scope, scope]), $("scope").value);
-    fillDays($("day").value);
+    const scopeLabel = (scope) => scope.startsWith("dataset-") ? "Dataset " + scope.slice(8, 16) : scope;
+    selectOptions($("scope"), scopes.map((scope) => [scope, scopeLabel(scope)]), selection?.scope || $("scope").value);
+    fillDays(selection?.day || $("day").value);
     await loadTab(true);
   } catch (error) {
     connection(error.status === 401 ? "Sign-in needed" : "Disconnected", false);
@@ -106,7 +115,7 @@ function fillDays(prior) {
 
 const context = () => new URLSearchParams({ scope: $("scope").value, day: $("day").value });
 
-function switchTab(tab) {
+function switchTab(tab, load = true) {
   state.tab = tab;
   for (const name of ["reports", "issues"]) {
     const active = name === tab;
@@ -118,7 +127,7 @@ function switchTab(tab) {
   $("page-title").textContent = tab === "reports" ? "Daily reports" : "Exceptions";
   $("page-subtitle").textContent = tab === "reports" ? "Reconciliation results by business date." :
     "Inspect candidates and record review decisions.";
-  act(() => loadTab(true));
+  if (load) act(() => loadTab(true));
 }
 
 async function loadTab(reset) {
@@ -334,10 +343,147 @@ async function act(action) {
   try { await action(); } catch (error) { notice("notice", error.message); }
 }
 
+function showDataset(dataset) {
+  if (state.dataset?.id !== dataset.id) {
+    $("pipeline").hidden = true;
+    $("run-pipeline").textContent = "Run reconciliation";
+    state.pipelineBusy = false;
+    updateDatasetButtons();
+  }
+  state.dataset = dataset;
+  const ledger = dataset.files.find((file) => file.kind === "ledger");
+  const settlements = dataset.files.find((file) => file.kind === "settlement");
+  $("dataset-summary").textContent = integer.format(ledger.rows) + " ledger rows · " +
+    integer.format(settlements.rows) + " settlement rows · seed " + dataset.seed;
+  $("dataset-downloads").replaceChildren(...[
+    [ledger.name, "Ledger CSV"], [settlements.name, "Settlements CSV"],
+    ["manifest.json", "Manifest JSON"], ["answer_key.json", "Answer key JSON"],
+  ].map(([name, label]) => {
+    const link = el("a", label, "button quiet");
+    link.href = "/api/datasets/" + dataset.id + "/" + name;
+    return link;
+  }));
+  $("dataset").hidden = false;
+}
+
+function updateDatasetButtons() {
+  $("run-pipeline").disabled = Boolean(state.pipelineBusy || state.generating);
+  $("generate-dataset").disabled = Boolean(state.pipelineBusy || state.generating);
+  $("close-dataset").disabled = Boolean(state.pipelineBusy);
+  $("pipeline-shortcut").hidden = !state.dataset;
+}
+
+async function openPipelineReport(job, report, scroll = false) {
+  switchTab("reports", false);
+  await refresh({ scope: job.scope, day: report.business_date });
+  if (scroll) $("workspace").scrollIntoView({ behavior: "smooth" });
+}
+
+function renderPipeline(job) {
+  state.pipelineBusy = job.status === "running";
+  updateDatasetButtons();
+  $("run-pipeline").textContent = state.pipelineBusy ? "Reconciliation running…" :
+    job.status === "complete" ? "Run again" : "Retry reconciliation";
+  $("pipeline").hidden = false;
+  $("pipeline-steps").replaceChildren(...Object.entries(pipelineSteps).map(([key, label]) => {
+    const detail = job.steps[key];
+    const active = job.stage === key;
+    const status = active && job.status === "failed" ? "Failed" :
+      active && state.pipelineBusy ? "Running" : detail ? "Complete" : "Waiting";
+    const step = el("li");
+    step.dataset.state = status;
+    if (active && state.pipelineBusy) step.setAttribute("aria-current", "step");
+    step.append(el("strong", label), el("span", status + (detail ? " · " + detail : "")));
+    return step;
+  }));
+  const status = job.error || (state.pipelineBusy ?
+    pipelineSteps[job.stage] + " · " + job.steps[job.stage] :
+    job.reports.length + " daily reports ready. Choose a date to see the results.");
+  if ($("pipeline-status").textContent !== status) $("pipeline-status").textContent = status;
+  $("pipeline-results").replaceChildren(...job.reports.map((report) => {
+    const button = el("button", "View " + dateLabel(report.business_date), "button quiet");
+    button.type = "button";
+    button.addEventListener("click", () => openPipelineReport(job, report, true));
+    return button;
+  }));
+}
+
+async function followPipeline(job) {
+  if (!job || job.dataset_id !== state.dataset?.id || state.following) return;
+  state.following = true;
+  try {
+    renderPipeline(job);
+    while (job.status === "running") {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      job = await request("/api/pipeline");
+      if (!job || job.dataset_id !== state.dataset?.id) {
+        throw new Error("This run is no longer active. Use Run reconciliation to resume it.");
+      }
+      renderPipeline(job);
+    }
+    if (job.status === "complete") await openPipelineReport(job, job.reports[0]);
+  } catch (error) {
+    state.pipelineBusy = false;
+    updateDatasetButtons();
+    $("run-pipeline").textContent = "Run reconciliation";
+    $("pipeline-status").textContent = error.message;
+  } finally {
+    state.following = false;
+  }
+}
+
+async function runPipeline() {
+  state.pipelineBusy = true;
+  updateDatasetButtons();
+  notice("dataset-status", "");
+  try {
+    const job = await request("/api/datasets/" + state.dataset.id + "/reconcile", {});
+    await followPipeline(job);
+  } catch (error) {
+    state.pipelineBusy = false;
+    updateDatasetButtons();
+    notice("dataset-status", error.message);
+  }
+}
+
+async function generateDataset() {
+  const button = $("generate-dataset");
+  state.generating = true;
+  updateDatasetButtons();
+  button.textContent = "Generating…";
+  notice("dataset-status", "Generating the ledger and settlements…");
+  try {
+    const dataset = await request("/api/datasets", {});
+    showDataset(dataset);
+    if (dataset.cleanup_pending) {
+      notice("dataset-status", "New dataset ready. Some old files could not be removed from disk.");
+    } else {
+      notice("dataset-status", "New dataset ready. Only this dataset is available.", true);
+    }
+  } catch (error) {
+    notice("dataset-status", error.message);
+  } finally {
+    button.textContent = "Generate dataset";
+    state.generating = false;
+    updateDatasetButtons();
+  }
+}
+
 for (const [key, label] of Object.entries(categories)) $("category").add(new Option(label, key));
 $("reports-tab").addEventListener("click", () => switchTab("reports"));
 $("issues-tab").addEventListener("click", () => switchTab("issues"));
-$("refresh").addEventListener("click", refresh);
+$("refresh").addEventListener("click", () => refresh());
+$("generate-dataset").addEventListener("click", generateDataset);
+$("run-pipeline").addEventListener("click", runPipeline);
+$("pipeline-shortcut").addEventListener("click", () => {
+  $("dataset").hidden = false;
+  $("run-pipeline").focus();
+});
+$("close-dataset").addEventListener("click", () => {
+  $("dataset").hidden = true;
+  notice("dataset-status", "");
+  $("pipeline-shortcut").focus();
+});
 $("scope").addEventListener("change", () => { fillDays(); act(() => loadTab(true)); });
 $("day").addEventListener("change", () => act(() => loadTab(true)));
 $("snapshot").addEventListener("change", () => act(loadReport));
@@ -359,6 +505,31 @@ async function start() {
       notice("notice", error.message);
       return;
     }
+  }
+  state.generating = true;
+  updateDatasetButtons();
+  try {
+    const dataset = await request("/api/datasets/current");
+    if (dataset) showDataset(dataset);
+    const job = await request("/api/pipeline");
+    if (job && job.dataset_id === state.dataset?.id) {
+      if (job.status === "complete") {
+        await followPipeline(job);
+        return;
+      }
+      if (job.status === "running") {
+        state.generating = false;
+        await refresh();
+        await followPipeline(job);
+        return;
+      }
+      renderPipeline(job);
+    }
+  } catch (error) {
+    if (error.status !== 401) notice("dataset-status", error.message);
+  } finally {
+    state.generating = false;
+    updateDatasetButtons();
   }
   await refresh();
 }

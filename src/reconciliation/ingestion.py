@@ -24,11 +24,13 @@ def extract(path, kind):
             })}
 
 
-def ingest(db, storage, path, kind, source, date_format="iso", batch_size=500, *, after_batch=None):
+def ingest(db, storage, path, kind, source, date_format="iso", batch_size=500, *, after_batch=None, expected_sha=None):
     scope_id(source)
     if kind not in FIELDS or date_format not in DATE_FORMATS or batch_size < 1:
         raise ValueError("Invalid file kind, date format, or batch size")
     sha, key = storage.capture(path)
+    if expected_sha is not None and sha != expected_sha:
+        raise InvalidFile("Captured file does not match its manifest hash")
     with db.begin() as conn:
         identity = dict(source=source, kind=kind, date_format=date_format, sha=sha, schema=SCHEMA_VERSION)
         query(conn, """

@@ -67,7 +67,7 @@ def score_reference(left, right):
     return ((width - distance) * 100) // width
 
 
-def match(ledgers, settlements, rules):
+def match(ledgers, settlements, rules, *, progress=None):
     """Prioritize exact evidence and require reciprocal confidence for fuzzy links."""
     ledgers = sorted(ledgers, key=lambda row: row.key)
     settlements = sorted(settlements, key=lambda row: row.key)
@@ -90,6 +90,8 @@ def match(ledgers, settlements, rules):
         used.add(right)
 
     for method in ("exact", "diagnostic"):
+        if progress:
+            progress(method)
         forward, reverse = {}, defaultdict(list)
         for left in ledgers:
             if left in links or left in held_ledgers:
@@ -119,6 +121,8 @@ def match(ledgers, settlements, rules):
             held.update(candidates)
             unresolved[left] = {"reason": f"competing_{method}_claims", "candidates": items}
 
+    if progress:
+        progress("fuzzy")
     forward, reverse = defaultdict(list), defaultdict(list)
     for left in ledgers:
         if left in links or left in held_ledgers:
@@ -154,8 +158,8 @@ def match(ledgers, settlements, rules):
     return links, unresolved, duplicates
 
 
-def classify(day, cutoff, ledgers, settlements, rules):
-    links, unresolved, duplicates = match(ledgers, settlements, rules)
+def classify(day, cutoff, ledgers, settlements, rules, *, progress=None):
+    links, unresolved, duplicates = match(ledgers, settlements, rules, progress=progress)
     focal = [row for row in ledgers if row.business_date == day]
     owned = {right: left for left, (right, _, _) in links.items()}
     owned.update({right: left for left, rows in duplicates.items() for right in rows})

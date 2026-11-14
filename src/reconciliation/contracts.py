@@ -10,7 +10,7 @@ FIELDS = {
     "ledger": (*COMMON, "gross", "collection_date", "deadline_date"),
     "settlement": (*COMMON, "net", "fee", "settlement_date", "available_at"),
 }
-DATE_FORMATS = ("iso", "dmy", "named")
+DATE_FORMATS = ("iso", "dmy", "named", "mixed")
 CATEGORIES = ("missing_settlement", "duplicate_settlement", "amount_mismatch", "late_settlement",
               "reference_mismatch", "ambiguous_match", "unexpected_settlement", "data_quality")
 MAX_MINOR = 10**15
@@ -42,12 +42,12 @@ def amount(raw, field):
 
 
 def local_date(raw, date_format):
-    if date_format == "iso" and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", raw):
+    if date_format in ("iso", "mixed") and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", raw):
         return date.fromisoformat(raw)
-    if date_format == "dmy" and re.fullmatch(r"[0-9]{2}/[0-9]{2}/[0-9]{4}", raw):
+    if date_format in ("dmy", "mixed") and re.fullmatch(r"[0-9]{2}/[0-9]{2}/[0-9]{4}", raw):
         day, month, year = map(int, raw.split("/"))
         return date(year, month, day)
-    if date_format == "named":
+    if date_format in ("named", "mixed"):
         match = re.fullmatch(r"([0-9]{2})-([A-Z]{3})-([0-9]{4})", raw)
         months = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()
         if match and match[2] in months:

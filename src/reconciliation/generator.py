@@ -15,14 +15,32 @@ SETTLEMENT_SOURCE = "upi-bank"
 SEEDED = ("missing_settlement", "duplicate_settlement", "amount_mismatch",
           "late_settlement", "reference_mismatch")
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+PAYMENT_PROFILES = (
+    ((5900, 9900, 14900, 24900, 39900), 2500, 75000),
+    ((19900, 34900, 49900, 79900, 129900), 9000, 300000),
+    ((49900, 99900, 149900, 249900, 399900), 25000, 900000),
+)
+SETTLEMENT_BATCHES = ((8, 30), (10, 15), (11, 30), (13, 0), (16, 30))
 
 
 def money(minor):
     return f"{minor // 100}.{minor % 100:02d}"
 
 
-def timestamp(day, hour):
-    return datetime.combine(day, time(hour), tzinfo=BUSINESS_TZ).isoformat()
+def timestamp(day, hour, minute=0):
+    return datetime.combine(day, time(hour, minute), tzinfo=BUSINESS_TZ).isoformat()
+
+
+def typical_amount(rng, merchant):
+    prices, minimum, maximum = PAYMENT_PROFILES[(merchant - 1) % len(PAYMENT_PROFILES)]
+    if rng.randrange(10) < 7:
+        return rng.choice(prices)
+    return rng.randrange(minimum, maximum)
+
+
+def provider_fee(gross, merchant):
+    basis_points = (0, 0, 15, 25, 40)[(merchant - 1) % 5]
+    return (gross * basis_points + 5000) // 10000
 
 
 def write_csv(path, fields, rows):
@@ -32,7 +50,17 @@ def write_csv(path, fields, rows):
         writer.writerows(rows)
 
 
-def generate(inputs, truth_dir, seed, count=12400, per_category=140):
+def format_day(value, layout):
+    months = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()
+    if layout == "named":
+        return f"{value.day:02d}-{months[value.month - 1]}-{value.year}"
+    if layout == "dmy":
+        return f"{value.day:02d}/{value.month:02d}/{value.year}"
+    return value.isoformat()
+
+
+def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_files=False,
+             merchant_profiles=False):
     inputs, truth_dir = Path(inputs), Path(truth_dir)
     if (inputs.resolve() == truth_dir.resolve() or inputs.resolve() in truth_dir.resolve().parents
             or truth_dir.resolve() in inputs.resolve().parents):
@@ -56,18 +84,26 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140):
     def reference():
         return "".join(rng.choices(ALPHABET, k=16))
 
-    def settlement_row(common, ref, amount, fee, day, arrival_hour=11):
+    def settlement_row(common, ref, amount, fee, day, arrival_hour=11, arrival_minute=0):
         return dict(id=opaque_id(), **common, reference=ref, net=money(amount - fee), fee=money(fee),
-                    settlement_date=day.isoformat(), available_at=timestamp(day, arrival_hour))
+                    settlement_date=day.isoformat(), available_at=timestamp(day, arrival_hour, arrival_minute))
 
     for index in range(count):
-        day = FIRST_DAY + timedelta(days=index % 3)
+        day_offset = rng.choices(range(3), (29, 34, 37))[0] if merchant_profiles else index % 3
+        day = FIRST_DAY + timedelta(days=day_offset)
         deadline = day + timedelta(days=1)
         ref = reference()
-        common = dict(merchant=f"merchant-{rng.randrange(1, 41):02d}", account=f"account-{rng.randrange(1, 4)}",
+        merchant = rng.randrange(1, 41)
+        common = dict(merchant=f"merchant-{merchant:02d}", account=f"account-{rng.randrange(1, 4)}",
                       currency="INR")
-        gross = rng.choice([9900, 14900, 19900, 24900, 49900, 99900]) if index % 3 else rng.randrange(2500, 900000)
+        if merchant_profiles:
+            gross = typical_amount(rng, merchant)
+        elif index % 3:
+            gross = rng.choice([9900, 14900, 19900, 24900, 49900, 99900])
+        else:
+            gross = rng.randrange(2500, 900000)
         if index in overlap[24:]:
+            merchant = 41
             common.update(merchant="merchant-41", account=f"account-{overlap.index(index)}")
         left = dict(id=opaque_id(), **common, reference=f"  {ref.lower()}  " if index % 7 == 0 else ref,
                     gross=money(gross), collection_date=day.isoformat(), deadline_date=deadline.isoformat())
@@ -90,7 +126,14 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140):
                 ref = ref[:pos] + rng.choice(ALPHABET.replace(ref[pos], "")) + ref[pos + 1:]
         if "amount_mismatch" in labels:
             gross += rng.choice((100, 199, 500, -100))
-        fee = min(gross // 10, rng.choice((0, 0, 15, 35, 75, 140)))
+        hour, minute, duplicate_hour = 11, 0, 14
+        if merchant_profiles:
+            fee = provider_fee(gross, merchant)
+            hour, minute = SETTLEMENT_BATCHES[(merchant - 1) % len(SETTLEMENT_BATCHES)]
+            minute += rng.randrange(20)
+            duplicate_hour = hour + 2
+        else:
+            fee = min(gross // 10, rng.choice((0, 0, 15, 35, 75, 140)))
         if index in overlap[24:]:
             # Equal reference distance from the true and competing ledger entries.
             clone = dict(left, id=opaque_id(), reference="B" + ref[1:])
@@ -101,12 +144,12 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140):
             truths.append(dict(truth, ledger=public_id(LEDGER_SOURCE, clone["id"]),
                                labels=["missing_settlement"]))
             truth["labels"] = ["reference_mismatch"]
-        right = settlement_row(common, ref.lower() if index % 5 == 0 else ref, gross, fee, settle_day)
+        right = settlement_row(common, ref.lower() if index % 5 == 0 else ref, gross, fee, settle_day, hour, minute)
         settlement.append(right)
         truth.update(settlement=public_id(SETTLEMENT_SOURCE, right["id"]), available_at=right["available_at"],
                      settlement_day_start=local_start(settle_day).isoformat())
         if "duplicate_settlement" in labels:
-            extra = settlement_row(common, ref, gross, fee, settle_day, 14)
+            extra = settlement_row(common, ref, gross, fee, settle_day, duplicate_hour, minute)
             settlement.append(extra)
             truth["extras"].append(dict(settlement=public_id(SETTLEMENT_SOURCE, extra["id"]),
                                         available_at=extra["available_at"]))
@@ -138,16 +181,28 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140):
         ("ledger", LEDGER_SOURCE, ledger, "named", ("collection_date", "deadline_date"), "ledger"),
         ("settlement", SETTLEMENT_SOURCE, settlement, "dmy", ("settlement_date",), "settlements"),
     ):
-        alternate = [row for row in rows if row["id"] not in invalid_ids][:20]
-        selected = {row["id"] for row in alternate}
-        for row in alternate:
-            for key in columns:
-                value = date.fromisoformat(row[key])
-                months = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()
-                row[key] = (f"{value.day:02d}-{months[value.month - 1]}-{value.year}" if date_format == "named"
-                            else f"{value.day:02d}/{value.month:02d}/{value.year}")
-        main = [row for row in rows if row["id"] not in selected]
-        for name, subset, layout in ((f"{basename}.csv", main, "iso"), (f"{basename}-{date_format}.csv", alternate, date_format)):
+        if two_files:
+            layout = "iso"
+            if kind == "settlement":
+                layout = "mixed"
+                for index, row in enumerate(rows):
+                    if row["id"] in invalid_ids:
+                        continue
+                    if index % 5 < 2:
+                        day = date.fromisoformat(row["settlement_date"])
+                        row["settlement_date"] = format_day(day, ("dmy", "named")[index % 5])
+                    if index % 7 == 0:
+                        row["reference"] = f"  {row['reference']}  "
+            outputs = [(f"{basename}.csv", rows, layout)]
+        else:
+            alternate = [row for row in rows if row["id"] not in invalid_ids][:20]
+            selected = {row["id"] for row in alternate}
+            for row in alternate:
+                for key in columns:
+                    row[key] = format_day(date.fromisoformat(row[key]), date_format)
+            main = [row for row in rows if row["id"] not in selected]
+            outputs = [(f"{basename}.csv", main, "iso"), (f"{basename}-{date_format}.csv", alternate, date_format)]
+        for name, subset, layout in outputs:
             path = inputs / name
             write_csv(path, FIELDS[kind], subset)
             files.append(dict(name=name, kind=kind, source=source, date_format=layout,
@@ -155,8 +210,11 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140):
 
     cutoff = local_start(FIRST_DAY + timedelta(days=6)).isoformat()
     dates = [(FIRST_DAY + timedelta(days=offset)).isoformat() for offset in range(3)]
+    configuration = dict(ledger_count=count, isolated_cases_per_category=per_category)
+    if merchant_profiles:
+        configuration["merchant_profiles"] = True
     manifest = dict(seed=seed, schema_version=SCHEMA_VERSION, business_dates=dates, final_cutoff=cutoff,
-                    configuration=dict(ledger_count=count, isolated_cases_per_category=per_category), files=files)
+                    configuration=configuration, files=files)
     json_file(inputs / "manifest.json", manifest)
     answer = dict(seed=seed, schema_version=SCHEMA_VERSION, rows=truths, invalid_rows=invalid, unexpected=unexpected,
                   deliberate_ambiguity=sorted(ambiguous), files=files, business_dates=dates, final_cutoff=cutoff)

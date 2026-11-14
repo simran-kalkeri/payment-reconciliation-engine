@@ -29,10 +29,31 @@
     <main id="main">
       <header class="top">
         <span>Reconciliation workspace</span>
-        <button id="refresh" type="button" class="button quiet">↻ <span>Refresh data</span></button>
+        <div class="top-actions">
+          <button id="refresh" type="button" class="button quiet">↻ <span>Refresh data</span></button>
+          <button id="pipeline-shortcut" type="button" class="button quiet" hidden>Current dataset</button>
+          <button id="generate-dataset" type="button" class="button primary">Generate dataset</button>
+        </div>
       </header>
       <div class="content">
         <div class="notice" id="notice" role="alert" hidden></div>
+        <div id="dataset-status" class="notice" role="status" hidden></div>
+        <section id="dataset" class="panel dataset-panel" aria-labelledby="dataset-title" hidden>
+          <div class="panel-heading">
+            <div><h2 id="dataset-title">Synthetic dataset</h2><p id="dataset-summary"></p></div>
+            <div class="top-actions">
+              <button id="close-dataset" type="button" class="button quiet">Hide dataset</button>
+              <button id="run-pipeline" type="button" class="button primary">Run reconciliation</button>
+            </div>
+          </div>
+          <div id="dataset-downloads" class="downloads"></div>
+          <section id="pipeline" class="pipeline" aria-labelledby="pipeline-title" hidden>
+            <h3 id="pipeline-title">Reconciliation progress</h3>
+            <ol id="pipeline-steps" class="pipeline-steps"></ol>
+            <p id="pipeline-status" role="status" class="dataset-help"></p>
+            <div id="pipeline-results" class="downloads" aria-label="Open daily results"></div>
+          </section>
+        </section>
         <div id="empty" class="empty panel" hidden></div>
         <div id="workspace" hidden>
           <div class="page-heading">
