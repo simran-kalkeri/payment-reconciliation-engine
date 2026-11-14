@@ -1,40 +1,26 @@
 # Architecture
 
-This is the intended architecture. There is no runtime implementation or test suite yet.
+```mermaid
+flowchart LR
+  CSV[Ledger and settlement CSVs] --> ING[Ingestion]
+  ING --> RAW[Content-addressed raw files]
+  ING --> STAGE[PostgreSQL staged rows]
+  STAGE --> NORM[Normalization workers]
+  NORM --> CAN[Canonical records and rejection evidence]
+  CAN --> MATCH[Reconciliation and matching]
+  MATCH --> RES[Immutable results and current exceptions]
+  RES --> WB[Review workbench and audit]
+  RES --> EX[Report and result exports]
+  EX --> EV[Offline evaluator]
+  TRUTH[Separate answer key] --> EV
+```
 
-## Boundaries
+`src/reconciliation/` contains separate modules for ingestion, normalization, matching, exception publication, reporting, workbench, generation, and evaluation. Typer exposes operator commands. SQLAlchemy and Psycopg handle transactions, Alembic manages the schema, and RapidFuzz computes reference distance.
 
-Use one modular Python application. Typer exposes operator commands, SQLAlchemy and Psycopg connect to PostgreSQL, Alembic owns schema changes, and RapidFuzz scores reference similarity. Pin dependencies and container versions and verify them together before documenting setup.
+- `ingestion.py` captures raw bytes first through the interface in `storage.py`. It stages rows in bounded commits keyed by file ID and CSV record number. Workers can see rows only when extraction completes. Retrying interrupted extraction verifies or recreates the same staging keys.
+- `normalization.py` claims bounded batches with PostgreSQL `FOR UPDATE SKIP LOCKED`. The transaction holds the claim through canonical writes and staging completion. PostgreSQL releases claims on disconnect. Retrying after commit sees completed rows. The worker retries eligible transient failures four times with exponential backoff and reports exhausted failures.
+- `reconcile.py` uses a per-scope, per-business-date advisory transaction lock. Input manifests, rules, matcher version, scope, date, and cutoff identify a context. A replay recomputes the business hash and compares it with the stored hash. New contexts publish atomically. An older cutoff can publish a historical snapshot while the current pointer remains on the latest cutoff. At equal cutoffs a newly published context becomes current.
+- PostgreSQL constraints enforce one ledger and one settlement per result assignment and require the correct record type at both endpoints. Current anomaly state and human review state are separate. Automatic updates preserve human review. Database triggers reject application updates, deletes, and truncation of audit history.
+- In isolated mode the matcher image uses a build allowlist and mounts only rules and exports. A separate PostgreSQL role reads canonical and quality views and writes publications. The role cannot read raw staging payloads. The evaluator reads exported JSON and its private answer key without a database connection. Use the restricted runner where the host trust assumption does not hold.
 
-| Planned location | Responsibility |
-| --- | --- |
-| `src/reconciliation/generator/` | Generate reproducible ledger and settlement CSVs, a manifest, and a separately held answer key. |
-| `src/reconciliation/ingestion/`, `storage/` | Capture original files in content-addressed storage, register manifests, and extract rows into PostgreSQL staging. |
-| `src/reconciliation/normalization/` | Validate staged rows, preserve source evidence, and write canonical ledger and settlement entries or quarantine rows. |
-| `src/reconciliation/matching/`, `exceptions/` | Match eligible canonical rows, persist evidence and exceptions, and record state changes. |
-| `src/reconciliation/reporting/`, `workbench/` | Publish versioned reports and support human review without rewriting source financial records. |
-| `src/reconciliation/evaluation/` | Compare exported results to the isolated answer key; measure pair and exception accuracy. |
-| `migrations/`, `config/`, `tests/`, `artifacts/` | Own schema history, versioned rules, unit and PostgreSQL integration/recovery tests, and demo outputs. |
-
-These paths are planned. Only the root guidance and `docs/` exist today.
-
-## Durable processing
-
-1. Capture raw bytes before processing and register content hash, source, type, schema version, storage location, status, counts, and timestamps. Identify staged rows by file identity and row number; retain the raw payload, attempt/claim state, timestamps, and canonical or rejection reference.
-2. Claim bounded batches transactionally. If processing outlives the claim transaction, use expiring leases and fence writes with a claim token. Commit canonical writes and staging completion together. Retry transient failures within a budget; quarantine permanent row errors and visibly fail malformed files or unexpected stage errors.
-3. Enforce canonical identity and one-to-one matching with database constraints. Version results by business scope, cutoff, input set, configuration, and matcher version. Prevent conflicting publication within a scope and expose incomplete attempts separately from completed snapshots.
-4. Keep matches, exceptions, and reviewer workflow distinct. Record automatic and human transitions in application append-only history. Hash deterministic business results separately from run IDs, timestamps, and other operational metadata.
-5. Give the matcher canonical inputs and matching configuration only. Isolate answer keys, truth labels, and generator internals behind separate runtime access. The evaluator can read truth and result exports and cannot feed answers back to the matcher.
-
-## Required automated checks
-
-**Pending:** There is no application to exercise. Add these checks alongside the relevant code and migrations.
-
-| Rule | Check to add |
-| --- | --- |
-| Ground truth stays isolated | Check matcher import boundaries and run it in an environment where truth files and stores are inaccessible. |
-| Amounts and dates are explicit | Unit-test decimal conversion, currency and date validation, fee reconstruction, and deadline/cutoff boundaries. |
-| Raw evidence and duplicates survive | Test valid rows beside a quarantined row, file rejection for invalid structure, identical redelivery, and two genuine settlement entries with the same reference and amount. |
-| Claims and writes are recoverable | With real PostgreSQL, test interrupted ingestion, worker contention, expired claims and stale writes, rollback, commit with lost acknowledgement, temporary database unavailability, and reprocessing already staged rows. |
-| Matching is one-to-one and safe to abstain | Test competing candidates and reversed input order; check merchant/currency and as-of boundaries. With real PostgreSQL, verify database constraints and concurrent publication. |
-| Reruns preserve reviews and financial results | Verify stable business hashes and no duplicate matches, exceptions, or replay-generated history. Check that late arrivals preserve prior snapshots and reviewer decisions; incomplete runs cannot publish complete reports, and overlapping exceptions do not inflate exposure. |
+See [business rules](business-rules.md) for matching and report populations. The [verification evidence](../artifacts/evidence/README.md) includes runtime, concurrency, recovery, evaluation, and replay results.

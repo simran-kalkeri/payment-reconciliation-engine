@@ -1,0 +1,48 @@
+{
+  "business_dates": [
+    "2025-05-12",
+    "2025-05-13",
+    "2025-05-14"
+  ],
+  "configuration": {
+    "isolated_cases_per_category": 140,
+    "ledger_count": 12400
+  },
+  "files": [
+    {
+      "date_format": "iso",
+      "kind": "ledger",
+      "name": "ledger.csv",
+      "rows": 12396,
+      "sha256": "64d87afc3be9e4c2e2712a44bbac36f43b2b893247274c7f62798230f4bab0d2",
+      "source": "ledger-office"
+    },
+    {
+      "date_format": "named",
+      "kind": "ledger",
+      "name": "ledger-named.csv",
+      "rows": 20,
+      "sha256": "959d70e9afe2d7e792361e425afaa5035ed1e1742680bef24ad4cb1a08f508b1",
+      "source": "ledger-office"
+    },
+    {
+      "date_format": "iso",
+      "kind": "settlement",
+      "name": "settlements.csv",
+      "rows": 12408,
+      "sha256": "18e3a4f1372107cf0a450d6fae0e3174c91ff0da17b0b424a36db4e65a6e06cb",
+      "source": "upi-bank"
+    },
+    {
+      "date_format": "dmy",
+      "kind": "settlement",
+      "name": "settlements-dmy.csv",
+      "rows": 20,
+      "sha256": "17b3a35bab1cc02eef3178dc2e1455df85924bd0482c3e583f0e8391d365d769",
+      "source": "upi-bank"
+    }
+  ],
+  "final_cutoff": "2025-05-17T18:30:00+00:00",
+  "schema_version": 1,
+  "seed": 90125
+}

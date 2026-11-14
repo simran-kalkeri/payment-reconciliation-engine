@@ -1,6 +1,6 @@
 # Payment Reconciliation Engine
 
-This repository is documentation only. There is no application, database schema, or test suite yet. See the [README](README.md#setup-run-and-test) for verified commands and their limits. Treat proposed paths and workflows as plans until they exist.
+Install from `requirements.lock` and run `reconcile migrate`, `reconcile demo`, and `python -m pytest -q` from the root. Use the database and test environment settings in the [README](README.md#setup-run-and-test).
 
 - Build a modular Python application with PostgreSQL-backed durable staging. Keep ingestion, transformation, matching, reporting, and evaluation separate.
 - Parse money with `Decimal` and store integer minor units. Handle fees, currency, date formats, timezones, and settlement deadlines explicitly. Never use binary floating point for financial calculations.

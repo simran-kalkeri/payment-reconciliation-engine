@@ -1,0 +1,29 @@
+{
+  "after": {
+    "canonical": 49672,
+    "exceptions": 3328,
+    "history": 3390,
+    "input_files": 8,
+    "matches": 52843,
+    "resolved": 1,
+    "results": 13,
+    "staged_rows": 49688
+  },
+  "after_hash": "50e9e4d983229e817c57b07e8b591568d4dbbe8064edbf0ccb4dc27ee9214605",
+  "after_run": 24,
+  "before": {
+    "canonical": 49672,
+    "exceptions": 3328,
+    "history": 3390,
+    "input_files": 8,
+    "matches": 52843,
+    "resolved": 1,
+    "results": 13,
+    "staged_rows": 49688
+  },
+  "before_hash": "50e9e4d983229e817c57b07e8b591568d4dbbe8064edbf0ccb4dc27ee9214605",
+  "before_run": 21,
+  "identical_file_reingest": true,
+  "staged_rows_replayed": 24844,
+  "unchanged": true
+}

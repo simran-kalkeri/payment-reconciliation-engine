@@ -1,16 +1,34 @@
 # Operational runbook
 
-**Status: planned.** There is no service, schema, or CLI to operate yet. The steps below define the intended recovery procedure; they have not been exercised. The [README](../README.md#setup-run-and-test) lists the only verified commands.
+Use the [setup instructions](../README.md#setup-run-and-test) and work from the repository root. The demo uses local files and a trusted operator. Keep access to raw and rejected payloads restricted to intake and authorized reviewers. A reviewer-supplied actor name is an audit label. Use managed database and filesystem credentials for deployment, with a separate schema owner, matcher and operator roles.
 
-| Situation | Intended response |
+| Situation | Action |
 | --- | --- |
-| Input file fails validation | Retain the original bytes and rejection evidence. Check the source, schema version, hash, and diagnostic. Submit a corrected file as a new input; do not overwrite the original. |
-| Individual rows are quarantined | Inspect rejection codes and counts while valid rows continue. Restrict access to raw payloads. Obtain a corrected source submission and retain the original rejection history. |
-| Worker crashes or PostgreSQL is unavailable | Keep the run visibly incomplete. Restore database connectivity, inspect attempts, claims and backlog, and reclaim abandoned work through the supported worker path. A stale worker must be unable to commit. If commit status is uncertain, retry with the same identity. |
-| Reconciliation needs a rerun | Use the same scope, cutoff, input hashes and rule versions for a replay. Compare canonical counts and business-result hashes; verify reviews and history survive. Publish a new result version for late arrivals or changed inputs or rules. |
-| Candidate or exception needs review | Inspect source evidence, candidates and history. Record a reason when resolving or reopening; on an edit conflict, reload the current state. A local actor label is not authentication. |
-| Database or raw storage is lost | Restore a consistent database backup and its corresponding raw files into an isolated environment. Verify manifests, raw hashes, row counts, pending claims, and audit history before resuming processing. A restore command and drill are still pending. |
+| File rejected | Run `reconcile files`. Verify the source, manifest, hash, and error. Obtain a corrected file and ingest it as new input. Retain the rejected bytes. |
+| Rows quarantined | Use `reconcile issues list --category data_quality` after publication, then `reconcile issues show ID`. Correct at the source. Keep quarantine evidence and distinguish data errors from business anomalies. |
+| Worker exits or database becomes unavailable | Check the PostgreSQL server and `reconcile health`. Restart the worker with the same file IDs. An interrupted transaction releases claims; already committed rows remain processed. Re-submit the same bytes if file extraction stopped before completion. |
+| Reconciliation incomplete | Verify declared file IDs and batch completeness, check file and row status, and finish ingestion or normalization. Use the same date and cutoff when replaying the intended context. |
+| Reviewer conflict | Reload the exception and retry with its current version. Use a nonempty reason for resolve or reopen. Read the complete audit history with `reconcile issues history ID`. |
+| Late arrival or revised rules | Reconcile the new input context. Read historical reports with `reconcile report RESULT_ID`. Compare the current exception and its history with prior snapshots. |
 
-Use structured logs keyed by run, file, row, stage, and error. Keep secrets and full sensitive payloads out of routine logs. Once monitoring exists, watch worker readiness, queue backlog and age, retries, rejection rates, run duration, and incomplete publication. Investigate stalled backlog, repeated failures, or unusual rejection spikes; alert thresholds and escalation ownership are open.
+Run `reconcile health` to inspect database readiness, worker heartbeats, backlog age, rejection totals, operation duration and failures. Example alerts are an active worker heartbeat older than 30 seconds, a backlog with no progress for five minutes, rising failures, or rejection rates above the source's established baseline. A killed process may leave a stale operational record. Claims are independent PostgreSQL locks. Routine logs contain IDs, error codes, and stage outcomes. Protect database dumps, raw backups and result exports as financial evidence.
 
-Local raw-file storage and application append-only history do not provide tamper-proof retention. Production access controls, backup procedures, and alerting need implementation and verification before deployment.
+## Backup and restore drill
+
+Quiesce writers so the database dump and raw-file copy describe the same point. Use PostgreSQL client tools with a service definition or password file and replace the example database names with your own. Set `RECON_DATABASE_URL` to the source first:
+
+```text
+python scripts/verify_restore.py artifacts/work/raw
+pg_dump -Fc -d reconciliation -f recon.dump
+```
+
+Copy the raw directory into backup storage, keeping its hash-based hierarchy. Restore into a new database and a separate raw directory:
+
+```text
+createdb reconciliation_restore
+pg_restore --exit-on-error --no-owner --no-privileges -d reconciliation_restore recon.dump
+```
+
+Set `RECON_DATABASE_URL` to the restored database and run `python scripts/verify_restore.py RESTORED_RAW_DIR`. Compare the source and restore summaries, including raw file hashes, staging counts, deterministic result hashes, and audit/review counts. Reapply deployment-specific grants before switching services. The verification script and actual drill are linked in the [evidence index](../artifacts/evidence/README.md).
+
+Local raw-file retention and the database audit trigger are application safeguards. Deployment still needs managed backup retention, role provisioning, monitoring delivery, and a policy for object lock.

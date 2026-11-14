@@ -1,0 +1,37 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="0" failures="0" skipped="0" tests="32" time="29.849" timestamp="2026-11-14T14:51:50.149206+05:30">
+    <testcase classname="tests.integration.test_matcher_access" name="test_restricted_runtime_executes_with_no_truth_modules_and_no_truth_table_access" time="6.461" />
+    <testcase classname="tests.test_scenarios" name="test_bad_row_keeps_valid_rows" time="0.810" />
+    <testcase classname="tests.test_scenarios" name="test_bad_file_never_loads[id,reference\nL,A\n]" time="0.924" />
+    <testcase classname="tests.test_scenarios" name="test_bad_file_never_loads[id,merchant,account,reference,currency,gross,collection_date,deadline_date\n&quot;unterminated\n]" time="0.850" />
+    <testcase classname="tests.test_scenarios" name="test_interrupted_ingestion_resumes_durable_batches" time="0.886" />
+    <testcase classname="tests.test_scenarios" name="test_worker_process_dies_after_claim" time="3.894" />
+    <testcase classname="tests.test_scenarios" name="test_failure_before_commit_rolls_back_canonical_and_completion" time="0.851" />
+    <testcase classname="tests.test_scenarios" name="test_lost_commit_acknowledgement_can_retry" time="0.839" />
+    <testcase classname="tests.test_scenarios" name="test_two_workers_claim_disjoint_rows" time="0.905" />
+    <testcase classname="tests.test_scenarios" name="test_identical_file_and_already_staged_replay" time="1.040" />
+    <testcase classname="tests.test_scenarios" name="test_temporary_database_unavailability_retries_actual_connection" time="4.760" />
+    <testcase classname="tests.test_scenarios" name="test_ambiguous_fuzzy_never_links" time="0.961" />
+    <testcase classname="tests.test_scenarios" name="test_redelivery_conflict_and_genuine_duplicates" time="1.029" />
+    <testcase classname="tests.test_scenarios" name="test_late_arrival_preserves_report_and_review_history" time="0.895" />
+    <testcase classname="tests.test_scenarios" name="test_fee_reconstruction_and_incomplete_reporting" time="0.883" />
+    <testcase classname="tests.test_scenarios" name="test_merchant_currency_and_future_arrival_are_excluded" time="0.935" />
+    <testcase classname="tests.test_scenarios" name="test_overlapping_exceptions_stay_separate" time="0.888" />
+    <testcase classname="tests.test_scenarios" name="test_concurrent_publication_creates_one_snapshot" time="0.983" />
+    <testcase classname="tests.unit.test_contracts" name="test_minor_units_are_exact[0-0]" time="0.001" />
+    <testcase classname="tests.unit.test_contracts" name="test_minor_units_are_exact[0.01-1]" time="0.002" />
+    <testcase classname="tests.unit.test_contracts" name="test_minor_units_are_exact[12.3-1230]" time="0.002" />
+    <testcase classname="tests.unit.test_contracts" name="test_minor_units_are_exact[10000.25-1000025]" time="0.002" />
+    <testcase classname="tests.unit.test_contracts" name="test_unsupported_amounts_are_rejected[1.001]" time="0.001" />
+    <testcase classname="tests.unit.test_contracts" name="test_unsupported_amounts_are_rejected[-1]" time="0.001" />
+    <testcase classname="tests.unit.test_contracts" name="test_unsupported_amounts_are_rejected[NaN]" time="0.001" />
+    <testcase classname="tests.unit.test_contracts" name="test_unsupported_amounts_are_rejected[1e2]" time="0.002" />
+    <testcase classname="tests.unit.test_contracts" name="test_unsupported_amounts_are_rejected[1,200.00]" time="0.001" />
+    <testcase classname="tests.unit.test_contracts" name="test_unsupported_amounts_are_rejected[99999999999999]" time="0.001" />
+    <testcase classname="tests.unit.test_contracts" name="test_declared_dates_and_timezone" time="0.001" />
+    <testcase classname="tests.unit.test_contracts" name="test_generator_repeats_exact_bytes_and_separates_truth" time="0.190" />
+    <testcase classname="tests.unit.test_contracts" name="test_zero_denominators_are_undefined" time="0.002" />
+    <testcase classname="tests.unit.test_contracts" name="test_isolated_matcher_imports_only_runtime_files" time="0.039" />
+  </testsuite>
+</testsuites>

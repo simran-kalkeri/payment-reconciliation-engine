@@ -1,0 +1,101 @@
+{
+  "accepted_rows": 24836,
+  "business_date": "2025-05-12",
+  "config_hash": "261d4372520fb9b529baf8a60fd65d5b6c60cea1831f7afa0cf69bceba599766",
+  "conservation": {
+    "expected_gross": true,
+    "input_rows": true,
+    "ledger_count": true,
+    "one_to_one": true,
+    "settlement_count": true,
+    "settlement_gross": true
+  },
+  "context_hash": "4b651e16164b488ccb4b91379d1868a54a109044f592f7916bc00e7e43c7ab46",
+  "cutoff": "2025-05-17T18:30:00+00:00",
+  "data_quality_warnings": {
+    "invalid_amount": 2,
+    "invalid_date": 2,
+    "invalid_field": 2,
+    "unsupported_currency": 2
+  },
+  "diagnostic_matches": 55,
+  "exact_matches": 3972,
+  "exception_counts": {
+    "ambiguous_match": 10,
+    "amount_mismatch": 55,
+    "data_quality": 8,
+    "duplicate_settlement": 50,
+    "late_settlement": 61,
+    "missing_settlement": 52,
+    "reference_mismatch": 50,
+    "unexpected_settlement": 10
+  },
+  "expected_gross": 1844747879,
+  "expected_gross_matched": 1819831841,
+  "expected_gross_unmatched": 24916038,
+  "exposure": {
+    "duplicate_exposure": 23831244,
+    "late_settled_value": 28209115,
+    "outstanding_expected": 21190268,
+    "unexplained_amount_discrepancy": 12082,
+    "unresolved_review_exposure": 3725770
+  },
+  "financial_population": "Ledger collection day; owned settlements follow the ledger, unowned use settlement day",
+  "fuzzy_matches": 50,
+  "grace_hours": 0,
+  "input_rows": 24844,
+  "inputs": [
+    {
+      "date_format": "iso",
+      "kind": "ledger",
+      "schema_version": 1,
+      "sha256": "64d87afc3be9e4c2e2712a44bbac36f43b2b893247274c7f62798230f4bab0d2",
+      "source": "ledger-office"
+    },
+    {
+      "date_format": "named",
+      "kind": "ledger",
+      "schema_version": 1,
+      "sha256": "959d70e9afe2d7e792361e425afaa5035ed1e1742680bef24ad4cb1a08f508b1",
+      "source": "ledger-office"
+    },
+    {
+      "date_format": "dmy",
+      "kind": "settlement",
+      "schema_version": 1,
+      "sha256": "17b3a35bab1cc02eef3178dc2e1455df85924bd0482c3e583f0e8391d365d769",
+      "source": "upi-bank"
+    },
+    {
+      "date_format": "iso",
+      "kind": "settlement",
+      "schema_version": 1,
+      "sha256": "18e3a4f1372107cf0a450d6fae0e3174c91ff0da17b0b424a36db4e65a6e06cb",
+      "source": "upi-bank"
+    }
+  ],
+  "ledger_count": 4139,
+  "ledger_matched": 4077,
+  "ledger_unmatched": 62,
+  "matcher_version": "1.0.0",
+  "pending_expected_gross": 0,
+  "pending_not_due": 0,
+  "pending_rows": 0,
+  "rejected_rows": 8,
+  "result_hash": "50e9e4d983229e817c57b07e8b591568d4dbbe8064edbf0ccb4dc27ee9214605",
+  "result_id": 11,
+  "run_id": 21,
+  "scope": "evaluation",
+  "settlement_count": 4137,
+  "settlement_fees": 180870,
+  "settlement_gross": 1843822367,
+  "settlement_gross_matched": 1819842123,
+  "settlement_gross_unmatched": 23980244,
+  "settlement_matched": 4077,
+  "settlement_net": 1843641497,
+  "settlement_unmatched": 60,
+  "source_completeness_attested": true,
+  "source_population": "All declared file rows, across business dates",
+  "status": "complete",
+  "unit": "INR paise"
+}

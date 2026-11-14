@@ -1,28 +1,35 @@
 # Business rules
 
-These are requirements and proposed input contracts for the initial engine. They are not implemented. Open policy choices are tracked in the [decision index](decisions/README.md).
+## Input contract
 
-## Inputs and money
+Schema version 1 uses UTF-8 CSV with a header. Column order may vary. The file declaration supplies its kind, source and one date format.
 
-| Input | Required information |
+| Kind | Required columns |
 | --- | --- |
-| Ledger | Stable ledger record ID, merchant/account scope, payment reference, currency, expected gross amount, collection date or timestamp, and expected settlement date or deadline. |
-| Settlement | Stable settlement entry ID, provider identity, merchant/account scope, payment reference, currency, net amount, declared fee, settlement date or timestamp, and arrival date or timestamp. |
+| Ledger | `id`, `merchant`, `account`, `reference`, `currency`, `gross`, `collection_date`, `deadline_date` |
+| Settlement | `id`, `merchant`, `account`, `reference`, `currency`, `net`, `fee`, `settlement_date`, `available_at` |
 
-Retain original values alongside normalized values. Parse decimal amounts with `Decimal`, convert to the declared currency's integer minor units, and quarantine invalid amounts and unsupported currencies. The initial scope is INR (100 paise per rupee). For a fee deducted from a payment, compare ledger gross against `settlement net + declared fee`; report gross, net, and fees separately. Excess precision, missing fee, and refund/reversal policies must be decided explicitly before accepting affected rows.
+The source and row ID identify an entry within its kind. Identical normalized redelivery maps to the same canonical record. A source that reuses an ID with changed canonical values receives an `identity_conflict` quarantine record. Distinct settlement IDs survive even if their reference and amounts agree. This contract assumes IDs are stable across deliveries within each source.
 
-Use Asia/Kolkata for business dates and UTC for stored instants. Treat date-only values as local calendar dates until a source rule gives them a time or cutoff. Accept only declared date formats; quarantine ambiguous or invalid dates. Banking-calendar support is out of scope for the initial design unless explicitly added and tested.
+Required fields are trimmed. References additionally use uppercase and remove whitespace. Merchant, account, and IDs remain case sensitive. Raw bytes and parsed field values are kept. An invalid header, malformed quoting or invalid UTF-8 rejects the file. Recoverable row shape errors and invalid values quarantine the row with a code and readable reason.
 
-## Eligibility, matching, and exceptions
+INR uses 100 paise per rupee. Amount fields require decimal text with at most two fractional digits. Missing fees and excess precision are quarantined. Gross must be positive, and net and fee must be nonnegative. Refunds, reversals and unsupported currencies are quarantined. The comparison uses settlement gross = net + declared fee. Stored and reported amounts are integers.
 
-- A settlement must have arrived by the as-of cutoff to be eligible. A collection that is not yet due stays pending. Classify a missing settlement only when its configured deadline and grace period have passed and available evidence supports the classification. Record source incompleteness rather than implying a final result from partial inputs.
-- Exact matching uses merchant/account scope, normalized reference, currency, reconstructed gross, and temporal eligibility. Keep repeated settlement entries as evidence; file replay or identical provider redelivery must not create a new business entry. Conflicting reuse of a provider ID needs review or quarantine under a declared source contract.
-- Fuzzy matching considers only remaining eligible candidates within scope, currency, date, and amount bounds. Require both a minimum score and a margin over the runner-up; resolve competing claims consistently on both sides. Never use input order to break an ambiguous tie. Diagnose exact-reference amount differences separately so amount filtering cannot hide them.
-- Track `missing_settlement`, `duplicate_settlement`, `amount_mismatch`, `late_settlement`, and `reference_mismatch`, plus `ambiguous_match`, `unexpected_settlement`, and data-quality issues. Multiple exceptions may apply to one transaction; a confirmed match may still have exceptions. A weak candidate alone is insufficient evidence for a reference mismatch.
-- Retain rule/configuration version, scores, competing candidates, amount and date differences, and the reason for accepting or abstaining. Reviewer actions require an actor, a reason, a timestamp, and previous/new states. Reruns and late arrivals must preserve prior snapshots and human history.
+Date formats are `iso` (`YYYY-MM-DD`), `dmy` (`DD/MM/YYYY`) and `named` (`DD-MMM-YYYY` with an uppercase English month). A source must declare the format. Business days use Asia/Kolkata. `available_at` and the run cutoff require seconds and a UTC offset. PostgreSQL stores instants as `timestamptz`. A deadline date is inclusive until the start of the next local day. Missing is eligible at that instant plus configured grace. A date-only settlement counts as late when its local day starts at or after that boundary. The default grace is zero. Weekends and holidays follow ordinary calendar days.
 
-## Reporting and evaluation
+## Matching and exception lifecycle
 
-Label reports with business date, cutoff, run and configuration identifiers, input hashes, and completeness. Reconcile input, accepted, rejected, and pending counts and matched/unmatched counts per side. Report monetary totals per currency. Keep outstanding, discrepancies, duplicate exposure, late-settled value, and unresolved review exposure separate; do not add overlapping categories or equate exposure with loss.
+1. A settlement is eligible when `available_at <= cutoff`. Within the declared file set, block candidates by merchant, account, currency and the configured forward calendar window from collection date.
+2. Exact candidates must also share reference and gross. A unique candidate with a unique claimant links. For multiple candidates from one provider with a unique claimant, the uniquely earliest settlement day and arrival identify the observed original. Additional entries are duplicate evidence. Tied originals or competing claimants go to review.
+3. A unique remaining exact-reference candidate with a different gross links in the diagnostic pass and produces an amount mismatch. Conflicting claims go to review.
+4. Fuzzy candidates must have equal gross. Score normalized references with integer Damerau–Levenshtein similarity. The top score must meet the floor, and both endpoints must prefer each other by at least the configured margin over their respective runners-up. Keep candidates within the score retention floor for evidence. Fuzzy acceptance produces a reference mismatch. The matcher uses no global assignment optimization.
 
-Evaluate in isolation on a held-out seed after freezing matcher rules on development data. Define per-category counting units and as-of eligibility before measuring, including duplicate groups and overlapping labels. Report actual true positives, false positives, false negatives, precision, recall, support, incorrect and missed links, and abstentions. Separate invalid-input cases from business exceptions and define how undefined metrics are displayed.
+The engine tracks missing, duplicate, amount, late, reference, ambiguous, unexpected, and data-quality exceptions. A ledger with no link and no retained ambiguity stays pending until its deadline. Ambiguous ledger rows and their contested settlements are review evidence. An accepted link can still have multiple anomalies. A later result can clear or reactivate an anomaly while preserving reviewer state and history.
+
+## Daily reports and independent scoring
+
+Reports include input manifest hashes, source completeness attestation, run and configuration IDs, and conservation checks. Source row counts and warnings cover the full selected files. Financial populations use ledger collection day. Linked and duplicate settlements follow their owning ledger date; unowned settlements use settlement day. For cross-day consistency, use the same file set, rules, and cutoff for all dates in a reporting batch.
+
+Outstanding collections, unexplained absolute discrepancies, duplicate exposure, late-settled value, and unresolved review exposure are separate INR paise measures. Categories can overlap and there is no aggregate loss figure.
+
+Evaluation uses the ledger ID for missing, amount, late and reference metrics. For duplicates it uses the ledger ID, original settlement ID and exact set of extra settlement IDs as one group. Each multilabel case contributes independently to its applicable categories. Expected availability follows each report's cutoff and grace. Malformed rows are tracked separately, and an undefined precision or recall is JSON `null`.

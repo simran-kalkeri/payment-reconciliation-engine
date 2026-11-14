@@ -1,0 +1,70 @@
+{
+  "abstentions": 24,
+  "business_dates": [
+    "2025-05-12",
+    "2025-05-13",
+    "2025-05-14"
+  ],
+  "config_hash": "261d4372520fb9b529baf8a60fd65d5b6c60cea1831f7afa0cf69bceba599766",
+  "cutoffs": {
+    "2025-05-12": "2025-05-17T18:30:00+00:00",
+    "2025-05-13": "2025-05-17T18:30:00+00:00",
+    "2025-05-14": "2025-05-17T18:30:00+00:00"
+  },
+  "deliberate_ambiguities_retained": 24,
+  "error_metrics": {
+    "amount_mismatch": {
+      "fn": 0,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 153,
+      "tp": 153
+    },
+    "duplicate_settlement": {
+      "fn": 0,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 140,
+      "tp": 140
+    },
+    "late_settlement": {
+      "fn": 0,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 164,
+      "tp": 164
+    },
+    "missing_settlement": {
+      "fn": 12,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 0.9210526315789473,
+      "support": 152,
+      "tp": 140
+    },
+    "reference_mismatch": {
+      "fn": 12,
+      "fp": 0,
+      "precision": 1.0,
+      "recall": 0.9263803680981595,
+      "support": 163,
+      "tp": 151
+    }
+  },
+  "excluded_invalid_rows": 8,
+  "false_matches": {
+    "diagnostic": 0,
+    "exact": 0,
+    "fuzzy": 0
+  },
+  "missed_link_reasons": {
+    "below_score_or_reciprocal_margin": 12
+  },
+  "missed_true_links": 12,
+  "predicted_links": 12248,
+  "seed": 90125,
+  "true_links": 12260
+}

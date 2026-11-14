@@ -1,0 +1,692 @@
+{
+  "abstentions": {
+    "ledger-office:09f13d713d723a6a3918c675": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:09f13d713d723a6a3918c675",
+          "ledger_reference": "A7JHCASDGT9BXPH3",
+          "score": 93,
+          "settlement": "upi-bank:a3ee032a2f9709f9eb62271f",
+          "settlement_reference": "C7JHCASDGT9BXPH3"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:550bbf195ac356e57f8f48fb",
+          "ledger_reference": "B7JHCASDGT9BXPH3",
+          "score": 93,
+          "settlement": "upi-bank:a3ee032a2f9709f9eb62271f",
+          "settlement_reference": "C7JHCASDGT9BXPH3"
+        }
+      ],
+      "ledger": "ledger-office:09f13d713d723a6a3918c675",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:14e0a5763605a3333f7258e1": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:14e0a5763605a3333f7258e1",
+          "ledger_reference": "A4WLZHFZ48E8J6X3",
+          "score": 93,
+          "settlement": "upi-bank:fae63cc4af38d2916094c30f",
+          "settlement_reference": "C4WLZHFZ48E8J6X3"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:fc93bab72535614f34dd9305",
+          "ledger_reference": "B4WLZHFZ48E8J6X3",
+          "score": 93,
+          "settlement": "upi-bank:fae63cc4af38d2916094c30f",
+          "settlement_reference": "C4WLZHFZ48E8J6X3"
+        }
+      ],
+      "ledger": "ledger-office:14e0a5763605a3333f7258e1",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:33e7d070e0efaccbdb722d20": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:33e7d070e0efaccbdb722d20",
+          "ledger_reference": "BRJVXRTV4SKESDU3",
+          "score": 93,
+          "settlement": "upi-bank:09f25f9ee714de8bbb648a96",
+          "settlement_reference": "CRJVXRTV4SKESDU3"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:c5c5f87c5a5947c9aae59ee4",
+          "ledger_reference": "ARJVXRTV4SKESDU3",
+          "score": 93,
+          "settlement": "upi-bank:09f25f9ee714de8bbb648a96",
+          "settlement_reference": "CRJVXRTV4SKESDU3"
+        }
+      ],
+      "ledger": "ledger-office:33e7d070e0efaccbdb722d20",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:4093f1894b787a42e4a5341f": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:4093f1894b787a42e4a5341f",
+          "ledger_reference": "BU7CHZ5XEP7BVCGK",
+          "score": 93,
+          "settlement": "upi-bank:4fb62d7fff71f0f9e548a38d",
+          "settlement_reference": "CU7CHZ5XEP7BVCGK"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:dd73c5929320119ef16591ac",
+          "ledger_reference": "AU7CHZ5XEP7BVCGK",
+          "score": 93,
+          "settlement": "upi-bank:4fb62d7fff71f0f9e548a38d",
+          "settlement_reference": "CU7CHZ5XEP7BVCGK"
+        }
+      ],
+      "ledger": "ledger-office:4093f1894b787a42e4a5341f",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:4c735bca66ed62915626b041": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:4c735bca66ed62915626b041",
+          "ledger_reference": "AGZQK2JEVE8HY44F",
+          "score": 93,
+          "settlement": "upi-bank:c359b4f9a8c23dd308c8fe3e",
+          "settlement_reference": "CGZQK2JEVE8HY44F"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:fc444d5836d21b655e7b5740",
+          "ledger_reference": "BGZQK2JEVE8HY44F",
+          "score": 93,
+          "settlement": "upi-bank:c359b4f9a8c23dd308c8fe3e",
+          "settlement_reference": "CGZQK2JEVE8HY44F"
+        }
+      ],
+      "ledger": "ledger-office:4c735bca66ed62915626b041",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:4eff05129ff9b0153b0eb8f7": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:4eff05129ff9b0153b0eb8f7",
+          "ledger_reference": "BRDYW7TNDWA5ZY7L",
+          "score": 93,
+          "settlement": "upi-bank:aff0d68fd5e7a7af6409a6a4",
+          "settlement_reference": "CRDYW7TNDWA5ZY7L"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:4f5defa2d83d6617cc0edeb3",
+          "ledger_reference": "ARDYW7TNDWA5ZY7L",
+          "score": 93,
+          "settlement": "upi-bank:aff0d68fd5e7a7af6409a6a4",
+          "settlement_reference": "CRDYW7TNDWA5ZY7L"
+        }
+      ],
+      "ledger": "ledger-office:4eff05129ff9b0153b0eb8f7",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:4f5defa2d83d6617cc0edeb3": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:4f5defa2d83d6617cc0edeb3",
+          "ledger_reference": "ARDYW7TNDWA5ZY7L",
+          "score": 93,
+          "settlement": "upi-bank:aff0d68fd5e7a7af6409a6a4",
+          "settlement_reference": "CRDYW7TNDWA5ZY7L"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:4eff05129ff9b0153b0eb8f7",
+          "ledger_reference": "BRDYW7TNDWA5ZY7L",
+          "score": 93,
+          "settlement": "upi-bank:aff0d68fd5e7a7af6409a6a4",
+          "settlement_reference": "CRDYW7TNDWA5ZY7L"
+        }
+      ],
+      "ledger": "ledger-office:4f5defa2d83d6617cc0edeb3",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:550bbf195ac356e57f8f48fb": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:550bbf195ac356e57f8f48fb",
+          "ledger_reference": "B7JHCASDGT9BXPH3",
+          "score": 93,
+          "settlement": "upi-bank:a3ee032a2f9709f9eb62271f",
+          "settlement_reference": "C7JHCASDGT9BXPH3"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:09f13d713d723a6a3918c675",
+          "ledger_reference": "A7JHCASDGT9BXPH3",
+          "score": 93,
+          "settlement": "upi-bank:a3ee032a2f9709f9eb62271f",
+          "settlement_reference": "C7JHCASDGT9BXPH3"
+        }
+      ],
+      "ledger": "ledger-office:550bbf195ac356e57f8f48fb",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:6a6443ef3df34d1f31140340": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:6a6443ef3df34d1f31140340",
+          "ledger_reference": "B88HZ6YC7CTHR7ZY",
+          "score": 93,
+          "settlement": "upi-bank:b527ac24db69d9fb0e0c4253",
+          "settlement_reference": "C88HZ6YC7CTHR7ZY"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:8aec77ea9531c36cf29a5f5b",
+          "ledger_reference": "A88HZ6YC7CTHR7ZY",
+          "score": 93,
+          "settlement": "upi-bank:b527ac24db69d9fb0e0c4253",
+          "settlement_reference": "C88HZ6YC7CTHR7ZY"
+        }
+      ],
+      "ledger": "ledger-office:6a6443ef3df34d1f31140340",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:6d99b3e3daf6c006b1da8771": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:6d99b3e3daf6c006b1da8771",
+          "ledger_reference": "BQ2CSFQRRM8UVAH9",
+          "score": 93,
+          "settlement": "upi-bank:97e195d2be722d991f80db4e",
+          "settlement_reference": "CQ2CSFQRRM8UVAH9"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:9907aa4c5f7b80abbd256972",
+          "ledger_reference": "AQ2CSFQRRM8UVAH9",
+          "score": 93,
+          "settlement": "upi-bank:97e195d2be722d991f80db4e",
+          "settlement_reference": "CQ2CSFQRRM8UVAH9"
+        }
+      ],
+      "ledger": "ledger-office:6d99b3e3daf6c006b1da8771",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:887af6d1bd29443fae587682": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:887af6d1bd29443fae587682",
+          "ledger_reference": "BNU9ZJNHY54TB6G4",
+          "score": 93,
+          "settlement": "upi-bank:de9e6ae873b4f00cbdb6ec73",
+          "settlement_reference": "CNU9ZJNHY54TB6G4"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:e5911dacb9cafbef36c18d82",
+          "ledger_reference": "ANU9ZJNHY54TB6G4",
+          "score": 93,
+          "settlement": "upi-bank:de9e6ae873b4f00cbdb6ec73",
+          "settlement_reference": "CNU9ZJNHY54TB6G4"
+        }
+      ],
+      "ledger": "ledger-office:887af6d1bd29443fae587682",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:8aec77ea9531c36cf29a5f5b": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:8aec77ea9531c36cf29a5f5b",
+          "ledger_reference": "A88HZ6YC7CTHR7ZY",
+          "score": 93,
+          "settlement": "upi-bank:b527ac24db69d9fb0e0c4253",
+          "settlement_reference": "C88HZ6YC7CTHR7ZY"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:6a6443ef3df34d1f31140340",
+          "ledger_reference": "B88HZ6YC7CTHR7ZY",
+          "score": 93,
+          "settlement": "upi-bank:b527ac24db69d9fb0e0c4253",
+          "settlement_reference": "C88HZ6YC7CTHR7ZY"
+        }
+      ],
+      "ledger": "ledger-office:8aec77ea9531c36cf29a5f5b",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:90bef2319ecf25b71e34bf55": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:90bef2319ecf25b71e34bf55",
+          "ledger_reference": "BSNLDGAXRPXZ84WR",
+          "score": 93,
+          "settlement": "upi-bank:3307c6b92f11b682c1c06210",
+          "settlement_reference": "CSNLDGAXRPXZ84WR"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:ec12d7220252550ba7a8488e",
+          "ledger_reference": "ASNLDGAXRPXZ84WR",
+          "score": 93,
+          "settlement": "upi-bank:3307c6b92f11b682c1c06210",
+          "settlement_reference": "CSNLDGAXRPXZ84WR"
+        }
+      ],
+      "ledger": "ledger-office:90bef2319ecf25b71e34bf55",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:9907aa4c5f7b80abbd256972": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:9907aa4c5f7b80abbd256972",
+          "ledger_reference": "AQ2CSFQRRM8UVAH9",
+          "score": 93,
+          "settlement": "upi-bank:97e195d2be722d991f80db4e",
+          "settlement_reference": "CQ2CSFQRRM8UVAH9"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:6d99b3e3daf6c006b1da8771",
+          "ledger_reference": "BQ2CSFQRRM8UVAH9",
+          "score": 93,
+          "settlement": "upi-bank:97e195d2be722d991f80db4e",
+          "settlement_reference": "CQ2CSFQRRM8UVAH9"
+        }
+      ],
+      "ledger": "ledger-office:9907aa4c5f7b80abbd256972",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:a1e2055d0f6948284927af12": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:a1e2055d0f6948284927af12",
+          "ledger_reference": "B8CRM47RACLFFNQ2",
+          "score": 93,
+          "settlement": "upi-bank:a75bf79cab8e795802904adf",
+          "settlement_reference": "C8CRM47RACLFFNQ2"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:f7d3e2220c0fb59923b99cc6",
+          "ledger_reference": "A8CRM47RACLFFNQ2",
+          "score": 93,
+          "settlement": "upi-bank:a75bf79cab8e795802904adf",
+          "settlement_reference": "C8CRM47RACLFFNQ2"
+        }
+      ],
+      "ledger": "ledger-office:a1e2055d0f6948284927af12",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:c5c5f87c5a5947c9aae59ee4": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:c5c5f87c5a5947c9aae59ee4",
+          "ledger_reference": "ARJVXRTV4SKESDU3",
+          "score": 93,
+          "settlement": "upi-bank:09f25f9ee714de8bbb648a96",
+          "settlement_reference": "CRJVXRTV4SKESDU3"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:33e7d070e0efaccbdb722d20",
+          "ledger_reference": "BRJVXRTV4SKESDU3",
+          "score": 93,
+          "settlement": "upi-bank:09f25f9ee714de8bbb648a96",
+          "settlement_reference": "CRJVXRTV4SKESDU3"
+        }
+      ],
+      "ledger": "ledger-office:c5c5f87c5a5947c9aae59ee4",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:c9b3852949c6101edfc2a7b5": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:c9b3852949c6101edfc2a7b5",
+          "ledger_reference": "BWB2JUR6WP247Z6K",
+          "score": 93,
+          "settlement": "upi-bank:cd0675700e7b5da165dbef0b",
+          "settlement_reference": "CWB2JUR6WP247Z6K"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:d24bcf4cd6c70d609fa005df",
+          "ledger_reference": "AWB2JUR6WP247Z6K",
+          "score": 93,
+          "settlement": "upi-bank:cd0675700e7b5da165dbef0b",
+          "settlement_reference": "CWB2JUR6WP247Z6K"
+        }
+      ],
+      "ledger": "ledger-office:c9b3852949c6101edfc2a7b5",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:d24bcf4cd6c70d609fa005df": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:d24bcf4cd6c70d609fa005df",
+          "ledger_reference": "AWB2JUR6WP247Z6K",
+          "score": 93,
+          "settlement": "upi-bank:cd0675700e7b5da165dbef0b",
+          "settlement_reference": "CWB2JUR6WP247Z6K"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:c9b3852949c6101edfc2a7b5",
+          "ledger_reference": "BWB2JUR6WP247Z6K",
+          "score": 93,
+          "settlement": "upi-bank:cd0675700e7b5da165dbef0b",
+          "settlement_reference": "CWB2JUR6WP247Z6K"
+        }
+      ],
+      "ledger": "ledger-office:d24bcf4cd6c70d609fa005df",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:dd73c5929320119ef16591ac": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:dd73c5929320119ef16591ac",
+          "ledger_reference": "AU7CHZ5XEP7BVCGK",
+          "score": 93,
+          "settlement": "upi-bank:4fb62d7fff71f0f9e548a38d",
+          "settlement_reference": "CU7CHZ5XEP7BVCGK"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:4093f1894b787a42e4a5341f",
+          "ledger_reference": "BU7CHZ5XEP7BVCGK",
+          "score": 93,
+          "settlement": "upi-bank:4fb62d7fff71f0f9e548a38d",
+          "settlement_reference": "CU7CHZ5XEP7BVCGK"
+        }
+      ],
+      "ledger": "ledger-office:dd73c5929320119ef16591ac",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:e5911dacb9cafbef36c18d82": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:e5911dacb9cafbef36c18d82",
+          "ledger_reference": "ANU9ZJNHY54TB6G4",
+          "score": 93,
+          "settlement": "upi-bank:de9e6ae873b4f00cbdb6ec73",
+          "settlement_reference": "CNU9ZJNHY54TB6G4"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:887af6d1bd29443fae587682",
+          "ledger_reference": "BNU9ZJNHY54TB6G4",
+          "score": 93,
+          "settlement": "upi-bank:de9e6ae873b4f00cbdb6ec73",
+          "settlement_reference": "CNU9ZJNHY54TB6G4"
+        }
+      ],
+      "ledger": "ledger-office:e5911dacb9cafbef36c18d82",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:ec12d7220252550ba7a8488e": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:ec12d7220252550ba7a8488e",
+          "ledger_reference": "ASNLDGAXRPXZ84WR",
+          "score": 93,
+          "settlement": "upi-bank:3307c6b92f11b682c1c06210",
+          "settlement_reference": "CSNLDGAXRPXZ84WR"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:90bef2319ecf25b71e34bf55",
+          "ledger_reference": "BSNLDGAXRPXZ84WR",
+          "score": 93,
+          "settlement": "upi-bank:3307c6b92f11b682c1c06210",
+          "settlement_reference": "CSNLDGAXRPXZ84WR"
+        }
+      ],
+      "ledger": "ledger-office:ec12d7220252550ba7a8488e",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:f7d3e2220c0fb59923b99cc6": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:f7d3e2220c0fb59923b99cc6",
+          "ledger_reference": "A8CRM47RACLFFNQ2",
+          "score": 93,
+          "settlement": "upi-bank:a75bf79cab8e795802904adf",
+          "settlement_reference": "C8CRM47RACLFFNQ2"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:a1e2055d0f6948284927af12",
+          "ledger_reference": "B8CRM47RACLFFNQ2",
+          "score": 93,
+          "settlement": "upi-bank:a75bf79cab8e795802904adf",
+          "settlement_reference": "C8CRM47RACLFFNQ2"
+        }
+      ],
+      "ledger": "ledger-office:f7d3e2220c0fb59923b99cc6",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:fc444d5836d21b655e7b5740": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:fc444d5836d21b655e7b5740",
+          "ledger_reference": "BGZQK2JEVE8HY44F",
+          "score": 93,
+          "settlement": "upi-bank:c359b4f9a8c23dd308c8fe3e",
+          "settlement_reference": "CGZQK2JEVE8HY44F"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:4c735bca66ed62915626b041",
+          "ledger_reference": "AGZQK2JEVE8HY44F",
+          "score": 93,
+          "settlement": "upi-bank:c359b4f9a8c23dd308c8fe3e",
+          "settlement_reference": "CGZQK2JEVE8HY44F"
+        }
+      ],
+      "ledger": "ledger-office:fc444d5836d21b655e7b5740",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    },
+    "ledger-office:fc93bab72535614f34dd9305": {
+      "candidates": [
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:fc93bab72535614f34dd9305",
+          "ledger_reference": "B4WLZHFZ48E8J6X3",
+          "score": 93,
+          "settlement": "upi-bank:fae63cc4af38d2916094c30f",
+          "settlement_reference": "C4WLZHFZ48E8J6X3"
+        },
+        {
+          "amount_difference": 0,
+          "date_difference": 1,
+          "ledger": "ledger-office:14e0a5763605a3333f7258e1",
+          "ledger_reference": "A4WLZHFZ48E8J6X3",
+          "score": 93,
+          "settlement": "upi-bank:fae63cc4af38d2916094c30f",
+          "settlement_reference": "C4WLZHFZ48E8J6X3"
+        }
+      ],
+      "ledger": "ledger-office:fc93bab72535614f34dd9305",
+      "reason": "below_score_or_reciprocal_margin",
+      "reverse_runner_up": 93,
+      "runner_up": null
+    }
+  },
+  "all_incorrect_links": [],
+  "false_fuzzy_matches": [],
+  "missed_true_links": [
+    {
+      "ledger": "ledger-office:14e0a5763605a3333f7258e1",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:fae63cc4af38d2916094c30f"
+    },
+    {
+      "ledger": "ledger-office:dd73c5929320119ef16591ac",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:4fb62d7fff71f0f9e548a38d"
+    },
+    {
+      "ledger": "ledger-office:8aec77ea9531c36cf29a5f5b",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:b527ac24db69d9fb0e0c4253"
+    },
+    {
+      "ledger": "ledger-office:f7d3e2220c0fb59923b99cc6",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:a75bf79cab8e795802904adf"
+    },
+    {
+      "ledger": "ledger-office:4c735bca66ed62915626b041",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:c359b4f9a8c23dd308c8fe3e"
+    },
+    {
+      "ledger": "ledger-office:c5c5f87c5a5947c9aae59ee4",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:09f25f9ee714de8bbb648a96"
+    },
+    {
+      "ledger": "ledger-office:d24bcf4cd6c70d609fa005df",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:cd0675700e7b5da165dbef0b"
+    },
+    {
+      "ledger": "ledger-office:ec12d7220252550ba7a8488e",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:3307c6b92f11b682c1c06210"
+    },
+    {
+      "ledger": "ledger-office:09f13d713d723a6a3918c675",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:a3ee032a2f9709f9eb62271f"
+    },
+    {
+      "ledger": "ledger-office:9907aa4c5f7b80abbd256972",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:97e195d2be722d991f80db4e"
+    },
+    {
+      "ledger": "ledger-office:e5911dacb9cafbef36c18d82",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:de9e6ae873b4f00cbdb6ec73"
+    },
+    {
+      "ledger": "ledger-office:4f5defa2d83d6617cc0edeb3",
+      "reason": "below_score_or_reciprocal_margin",
+      "true_settlement": "upi-bank:aff0d68fd5e7a7af6409a6a4"
+    }
+  ]
+}
