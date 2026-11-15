@@ -1,17 +1,15 @@
 # Payment Reconciliation Engine
 
-Task 9 submission by Simran Kalkeri. The engine reconciles expected collections against synthetic bank or UPI settlements. The local dashboard runs the full workflow, shows why exceptions were flagged, and evaluates matching against a separate answer key.
+[![PostgreSQL integration tests and isolated demo](https://github.com/simran-kalkeri/payment-reconciliation-engine/actions/workflows/verification.yml/badge.svg?branch=main)](https://github.com/simran-kalkeri/payment-reconciliation-engine/actions/workflows/verification.yml)
+[![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](#tech-stack)
+[![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](#tech-stack)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](compose.yaml)
 
-## What the assignment implements
+Reconcile expected collections against synthetic bank or UPI settlements. The local dashboard runs the pipeline, explains exceptions, and measures matching quality against a separate answer key.
 
-| Stage | What it does |
-| --- | --- |
-| Generate | Creates a ledger CSV and a settlement CSV, with 10,000 to 15,000 data rows combined. Every dataset includes missing, duplicate, late, amount mismatch, and reference mismatch cases. Settlement rows include deducted fees, mixed date formats, and reference whitespace. A separate answer key records the seeded cases. |
-| Ingest and validate | Verifies both input hashes, retains the original files, and stages the rows in PostgreSQL. Workers normalize references, dates and INR amounts, reconstruct gross amounts from net plus fees, and quarantine invalid rows with reasons. |
-| Match | Links exact reference and amount matches first. A separate check flags same-reference amount discrepancies. The fuzzy pass considers equal gross amounts within the date window and requires a sufficiently similar reference and a clear lead on both sides. Competing candidates go to review. |
-| Publish and review | Publishes daily matched and unmatched counts for ledger and settlement rows. The report separates outstanding collections, amount discrepancies, duplicate exposure, late settled value, and amounts under review. The workbench shows evidence and records resolutions, reasons, and history. |
-| Evaluate | Compares the published matches and exceptions with the answer key after matching. Shows precision, recall, false matches by pass, and explanations of missed links drawn from candidate evidence. |
-| Replay | Uses file fingerprints and stable transaction identities to handle repeat delivery. A replay verifies the result hash, reuses the published report, and preserves reviewer decisions. |
+**Task 9 submission · Simran Kalkeri**
+
+[Run locally](#setup-run-and-test) · [See the workflow](#reconciliation-workflow) · [View measured results](#evaluation-and-evidence) · [Tech stack](#tech-stack)
 
 ## Prerequisites
 
@@ -67,7 +65,50 @@ If the portable Windows demo is already installed in `.local`, run `.\dashboard.
 4. Open **Exceptions**, choose an item, and click **Review**. Inspect the source evidence and resolve the case with your name and a reason. The audit history records the decision.
 5. Return to **Pipeline** and click **Run again** to replay the same inputs. Compare the published result IDs and evaluation. To reproduce a saved dataset, use `.\.venv\Scripts\reconcile.exe generate artifacts/work/inputs artifacts/work/truth --from-manifest PATH_TO_MANIFEST`.
 
-### CLI demo and PostgreSQL tests
+## Reconciliation workflow
+
+```mermaid
+flowchart LR
+    G["Generate synthetic data"] --> C["Ledger and settlement CSVs"]
+    C --> N["Stage and validate in PostgreSQL"]
+    N --> M["Exact and fuzzy matching"]
+    M --> R["Daily reports and exceptions"]
+    R --> E["Score the results"]
+    G --> K["Separate answer key"]
+    K --> E
+```
+
+| Stage | What it does |
+| --- | --- |
+| **Generate** | Creates two CSVs with at least 10,000 valid rows and at most 15,000 data rows combined. Each dataset includes missing, duplicate, late, amount mismatch, and reference mismatch cases. Settlement rows include deducted fees, mixed date formats, and reference whitespace. |
+| **Ingest and validate** | Verifies both file hashes, retains the original bytes, and stages rows in PostgreSQL. Workers parse money with `Decimal`, store integer paise, normalize dates and references, and quarantine invalid rows with reasons. |
+| **Match** | Attempts exact reference and gross amount matches, then flags unique same-reference amount differences. The fuzzy pass compares references among equal-gross candidates in the date window. A pair must meet the score floor and lead competing candidates on both sides. |
+| **Publish and review** | Publishes matched and unmatched totals and financial exposure by category. The exception workbench shows evidence and preserves each review decision, reason, and history. |
+| **Evaluate** | Compares the published results with the answer key after matching. Shows precision and recall by error type, false matches by pass, and explanations of misses drawn from recorded candidate evidence. |
+| **Replay** | Identifies repeat deliveries using file fingerprints and stable transaction IDs. An identical replay checks the result hash before reusing the report and preserves review history. |
+
+## Evaluation and evidence
+
+On the fixed-seed benchmark in this repository, the matcher linked **12,248 of 12,260 true pairs** with **zero false links**. Each missed link had tied candidates and went to review. The benchmark uses extra CSVs to exercise separate date-format declarations. The dashboard generates two files for the assignment workflow.
+
+| Deliverable | Where to find it |
+| --- | --- |
+| Matching rationale, precision and recall, and missed cases | [Write-up and metrics table](docs/write-up.md) · [Case evidence](artifacts/evidence/mistake-analysis.json) |
+| Reproducible inputs and answer key | [Evidence index](artifacts/evidence/README.md) |
+| Sample daily reconciliation report | [May 12 report](artifacts/evidence/reports/2025-05-12/report.md) |
+| Rerun and review evidence | [Before and after record counts and result hashes](artifacts/evidence/rerun.json) · [Review history](artifacts/evidence/review.json) |
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Engine | Python 3.14 and `Decimal` for exact money parsing |
+| Data and migrations | PostgreSQL 17, SQLAlchemy, Psycopg, Alembic |
+| Reference matching | RapidFuzz with Damerau–Levenshtein similarity |
+| Dashboard and CLI | HTML, CSS, vanilla JavaScript, Python's HTTP server, and Typer |
+| Local services and verification | Docker Compose, pytest, and GitHub Actions |
+
+## CLI demo and PostgreSQL tests
 
 After starting PostgreSQL and applying migrations, run the fixed-seed CLI demo if you want to regenerate the benchmark evidence. This benchmark uses additional CSVs to test separate date-format declarations. The dashboard steps above run the two-file assignment workflow.
 
