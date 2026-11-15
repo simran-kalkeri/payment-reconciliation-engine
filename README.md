@@ -5,9 +5,9 @@
 [![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](#tech-stack)
 [![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](compose.yaml)
 
-Reconcile expected collections against synthetic bank or UPI settlements. The local dashboard runs the pipeline, explains exceptions, and measures matching quality against a separate answer key.
+I built this project to explore how payment reconciliation works when bank or UPI settlements arrive late, contain duplicates, or have inconsistent references. The engine compares expected collections with synthetic settlement data, sends uncertain matches to review, and makes it possible to replay the same files without duplicating records.
 
-**Task 9 submission · Simran Kalkeri**
+The local dashboard shows the pipeline from CSV generation through matching and evaluation. It also provides downloadable daily reports and a workbench for reviewing exceptions.
 
 [Run locally](#setup-run-and-test) · [See the workflow](#reconciliation-workflow) · [View measured results](#evaluation-and-evidence) · [Tech stack](#tech-stack)
 
@@ -57,7 +57,7 @@ Open PowerShell in the project folder, where `README.md` and `compose.yaml` are 
 
 If the portable Windows demo is already installed in `.local`, run `.\dashboard.cmd` instead. On macOS or Linux, create the environment with `python3.14 -m venv .venv`, use `.venv/bin/python` and `.venv/bin/reconcile`, and copy `.env.example` to `.env` with `cp`.
 
-### Walk through the assignment
+### Run a dashboard demo
 
 1. Open **Pipeline** and click **Generate dataset**. Download the ledger CSV, settlements CSV, manifest, and answer key. The generated files cover two to seven recent business dates. Each new dataset varies the row count and the number of cases of each seeded error type.
 2. Click **Run reconciliation** and follow the stages through **Evaluation**. Click a workflow node to see its rules and checks. The evaluation panel shows the measured table, false matches, and individual explanations for missed links.
@@ -89,9 +89,9 @@ flowchart LR
 
 ## Evaluation and evidence
 
-On the fixed-seed benchmark in this repository, the matcher linked **12,248 of 12,260 true pairs** with **zero false links**. Each missed link had tied candidates and went to review. The benchmark uses extra CSVs to exercise separate date-format declarations. The dashboard generates two files for the assignment workflow.
+On the fixed-seed benchmark in this repository, the matcher linked **12,248 of 12,260 true pairs** with **zero false links**. Each missed link had tied candidates and went to review. The benchmark uses extra CSVs to exercise separate date-format declarations. A dashboard run uses one ledger CSV and one settlement CSV.
 
-| Deliverable | Where to find it |
+| Artifact | Where to find it |
 | --- | --- |
 | Matching rationale, precision and recall, and missed cases | [Write-up and metrics table](docs/write-up.md) · [Case evidence](artifacts/evidence/mistake-analysis.json) |
 | Reproducible inputs and answer key | [Evidence index](artifacts/evidence/README.md) |
@@ -110,7 +110,7 @@ On the fixed-seed benchmark in this repository, the matcher linked **12,248 of 1
 
 ## CLI demo and PostgreSQL tests
 
-After starting PostgreSQL and applying migrations, run the fixed-seed CLI demo if you want to regenerate the benchmark evidence. This benchmark uses additional CSVs to test separate date-format declarations. The dashboard steps above run the two-file assignment workflow.
+After starting PostgreSQL and applying migrations, run the fixed-seed CLI demo to reproduce the benchmark:
 
 ```powershell
 .\.venv\Scripts\reconcile.exe demo
