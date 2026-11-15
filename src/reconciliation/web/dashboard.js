@@ -16,6 +16,42 @@ const pipelineSteps = {
   evaluate: { label: "Evaluate", nodeType: "Answer key", icon: "◎",
     description: "Score the published results against the answer key. Review precision, recall, and the reasons for missed links." },
 };
+const stepChecks = {
+  read: [
+    ["Identify the input files", "Read the dataset manifest and expect one ledger CSV for expected collections and one settlement CSV for provider payments."],
+    ["Verify the file contents", "Compute a SHA-256 fingerprint for each CSV and compare it with the manifest. A changed file stops the run before staging."],
+    ["Set the reporting window", "Load the business dates and the cutoff that determines which settlements are available for matching."],
+  ],
+  stage: [
+    ["Preserve the original CSVs", "Save a byte-for-byte copy of each file. The file fingerprint and source identify repeat deliveries."],
+    ["Parse and stage the rows", "Check the CSV headers and save each parsed row in PostgreSQL, keyed by file and row number."],
+    ["Handle unreadable files", "A bad header, broken quoting, or invalid UTF-8 rejects the file. Rows that can be read move to validation, where individual errors are handled."],
+  ],
+  validate: [
+    ["Check the required fields", "Reject rows with missing or extra columns or empty required values. Trim the fields, then uppercase references and remove internal whitespace."],
+    ["Validate dates and deadlines", "Parse the declared date format and require a UTC offset on arrival timestamps. Reject deadlines before collection and arrivals before the settlement date."],
+    ["Check currency, amounts, and fees", "Accept INR and parse money into integer paise. Rebuild settlement gross as net plus fee. A ₹495 deposit with a ₹5 fee is compared as ₹500."],
+    ["Check source IDs", "Reuse an existing transaction for an identical redelivery. Quarantine reused IDs with changed values. Settlements with distinct IDs are preserved for duplicate checks."],
+    ["Quarantine individual failures", "Save the rejection code and explanation with the source row. Valid rows continue to matching."],
+  ],
+  match: [
+    ["Find eligible candidates", "Compare entries for the same merchant, account, and currency. The settlement must be available by the cutoff and fall within the forward date window from collection."],
+    ["Match exact references and amounts", "Link a unique pair with the same normalized reference and gross amount. If one provider sent multiple eligible copies, a uniquely earliest settlement can be linked and the rest flagged as duplicates."],
+    ["Check amount differences", "A unique remaining pair with the same reference and a different gross amount becomes an amount mismatch."],
+    ["Score fuzzy references", "For remaining rows with equal gross amounts, score reference similarity. A pair must meet the minimum score and beat competing candidates on both sides by the required margin."],
+    ["Leave uncertain cases for review", "A settlement can link to only one ledger entry. Tied or conflicting candidates go to review. An unlinked ledger entry stays pending until its deadline, then becomes missing."],
+  ],
+  publish: [
+    ["Build the daily report", "Count matched and unmatched entries on both sides, then show financial exposure by category. Late, missing, duplicate, and other exceptions appear in the review queue."],
+    ["Check totals before saving", "Verify that matched and unmatched counts and amounts add up, that settlement net plus fees equals gross, and that each accepted link is one-to-one."],
+    ["Reuse identical results", "Replaying the same report context checks its result fingerprint before reusing the saved version. Reviewer decisions and audit history are preserved."],
+  ],
+  evaluate: [
+    ["Verify the answer key", "After reports are saved, the evaluator checks that their input fingerprints agree with those recorded in the answer key."],
+    ["Measure the results", "Compare detected exceptions with the five seeded error types to calculate precision and recall. Count incorrect ledger-to-settlement links by matching pass."],
+    ["Explain missed links", "Use the stored candidate scores and matching rules to show why a link was missed, such as a tie or a score below the threshold. The matcher works without the answer key."],
+  ],
+};
 const matchingPasses = { exact: "Exact references", diagnostic: "Amount mismatches", fuzzy: "Fuzzy references" };
 const workflow = { nodes: new Map(), job: null, selected: "read", follow: true };
 const categories = {
@@ -411,12 +447,14 @@ function initializeWorkflow() {
     const status = el("span", "Waiting", "stage-state");
     const button = el("button", null, "workflow-node-button");
     button.type = "button";
-    button.setAttribute("aria-controls", "workflow-inspector");
+    button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-controls", "workflow-step");
     button.append(icon, name, status);
     button.addEventListener("click", () => {
       workflow.follow = false;
       workflow.selected = key;
       renderStage();
+      openWorkflowStep(key);
     });
     node.append(button, edge);
     workflow.nodes.set(key, { node, button, status });
@@ -429,6 +467,37 @@ function stageState(job, key) {
   if (job.stage === key && job.status === "failed") return "Failed";
   if (job.stage === key && job.status === "running") return "Running";
   return job.steps[key] ? "Complete" : "Waiting";
+}
+
+function openWorkflowStep(key) {
+  const dialog = $("workflow-step");
+  $("workflow-step-title").textContent = pipelineSteps[key].label;
+  $("workflow-step-checks").replaceChildren(...stepChecks[key].map(([heading, description]) => {
+    const item = el("li");
+    item.append(el("strong", heading), el("p", description));
+    return item;
+  }));
+  renderWorkflowStep(key, workflow.job);
+  dialog.scrollTop = 0;
+  dialog.showModal();
+}
+
+function renderWorkflowStep(key, job) {
+  const status = stageState(job, key);
+  $("workflow-step-status").textContent = status;
+  $("workflow-step-status").dataset.state = status;
+  const progress = status === "Failed" ? job.error : job?.steps[key];
+  $("workflow-step-progress").textContent = progress || "Waiting for this stage.";
+  const rules = key === "match" ? job?.matching_rules : null;
+  $("workflow-step-rules").hidden = !rules;
+  if (rules) {
+    pairs("workflow-rule-values", [
+      ["Settlement date window", `0–${rules.date_window} days after collection`],
+      ["Minimum reference score", `${rules.minimum_score}/100`],
+      ["Minimum lead over a competing candidate", `${rules.minimum_margin} points`],
+      ["Grace period after deadline", `${rules.grace_hours} hours`],
+    ], (value) => value);
+  }
 }
 
 function renderStage() {
@@ -460,6 +529,7 @@ function renderStage() {
   $("stage-passes").hidden = selected !== "match";
   $("open-evaluation").hidden = selected !== "evaluate" || !job?.evaluation;
   if (selected === "match") renderMatchingPasses(job, status);
+  if ($("workflow-step").open) renderWorkflowStep(selected, job);
 }
 
 function renderMatchingPasses(job, status) {

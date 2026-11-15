@@ -156,6 +156,23 @@
       </div>
     </main>
   </div>
+  <dialog id="workflow-step" aria-labelledby="workflow-step-title">
+    <div class="dialog-top">
+      <h2 id="workflow-step-title"></h2>
+      <form method="dialog"><button type="submit" class="button quiet" autofocus>Close</button></form>
+    </div>
+    <div class="dialog-body">
+      <div class="workflow-step-progress">
+        <span id="workflow-step-status" class="stage-state"></span>
+        <p id="workflow-step-progress"></p>
+      </div>
+      <ol id="workflow-step-checks" class="workflow-step-checks"></ol>
+      <section id="workflow-step-rules" class="workflow-step-rules" hidden>
+        <h3>Matching settings for this run</h3>
+        <dl id="workflow-rule-values" class="money-list"></dl>
+      </section>
+    </div>
+  </dialog>
   <dialog id="issue-detail" aria-labelledby="issue-title">
     <div class="dialog-top"><div><p id="issue-number"></p><h2 id="issue-title">Exception</h2></div><button type="button" id="close" class="button quiet" aria-label="Close exception">×</button></div>
     <div class="dialog-body">

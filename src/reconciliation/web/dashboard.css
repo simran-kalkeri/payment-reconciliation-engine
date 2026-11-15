@@ -198,6 +198,14 @@ dialog::backdrop { background: #132a2577; }
 #close { font-size: 22px; padding: 4px 10px; }
 .dialog-body { display: grid; gap: 17px; padding: 17px 22px 22px; }
 .dialog-body h3 { font-size: 15px; margin-bottom: 7px; }
+.workflow-step-progress { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  border-radius: 9px; background: #f0f5f1; padding: 10px 12px; }
+.workflow-step-progress p { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.workflow-step-checks { display: grid; gap: 12px; margin: 0; padding-left: 21px; font-size: 14px; line-height: 1.45; }
+.workflow-step-checks li::marker { color: var(--green); }
+.workflow-step-checks p { margin-top: 3px; color: var(--muted); }
+.workflow-step-rules { padding-top: 12px; border-top: 1px solid var(--line); }
+.workflow-step-rules .money-list { margin-top: 0; }
 .issue-summary { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); }
 .evidence-note, .dialog-body details { font-size: 13px; line-height: 1.5; color: var(--muted); }
 .dialog-body details { padding: 10px 0; border-block: 1px solid var(--line); }

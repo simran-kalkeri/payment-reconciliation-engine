@@ -2,6 +2,7 @@
 
 import json
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 from threading import Lock, Thread
@@ -115,6 +116,8 @@ class DashboardPipeline:
         rules = Rules.read(Path("config/frozen.json"))
         if not days:
             raise PipelineError("The dataset manifest has no business dates.")
+        with self.lock:
+            self.job["matching_rules"] = asdict(rules)
         self.step("read", "Verified both CSVs against the manifest.")
 
         file_ids = []

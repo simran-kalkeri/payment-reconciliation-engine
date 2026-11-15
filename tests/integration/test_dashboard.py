@@ -6,6 +6,7 @@ from contextlib import closing
 from hashlib import sha256
 from datetime import date, timedelta
 from io import StringIO
+from pathlib import Path
 from threading import Event, Thread
 from time import monotonic, sleep
 
@@ -286,6 +287,7 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
             assert status == 200 and progress["stage"] == "validate"
             assert progress["status"] == "running" and not progress["reports"]
             assert set(progress["steps"]) == {"read", "stage", "validate"}
+            assert progress["matching_rules"] == json.loads(Path("config/frozen.json").read_text(encoding="utf-8"))
             assert send(route, post=True)[1] == progress
             assert send("/api/datasets", post=True)[0] == 409
             continue_validation.set()
@@ -312,6 +314,7 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
             assert send(route, post=True)[0] == 202
             replay = finished()
             assert replay["status"] == "complete", replay
+            assert replay["matching_rules"] == progress["matching_rules"]
             assert replay["match_phase"] == "done"
             assert replay["reports"] == first["reports"]
             assert counts(database) == before
