@@ -9,7 +9,17 @@ I built this project to explore how payment reconciliation works when bank or UP
 
 The local dashboard shows the pipeline from CSV generation through matching and evaluation. It also provides downloadable daily reports and a workbench for reviewing exceptions.
 
-[Run locally](#setup-run-and-test) · [See the workflow](#reconciliation-workflow) · [View measured results](#evaluation-and-evidence) · [Tech stack](#tech-stack)
+[Windows shortcut](#windows-shortcut) · [First-time setup](#setup-run-and-test) · [Workflow](#reconciliation-workflow) · [Measured results](#evaluation-and-evidence) · [Tech stack](#tech-stack)
+
+## Windows shortcut
+
+If the portable demo is already installed in `.local`, open PowerShell in the project folder and run:
+
+```powershell
+.\dashboard.cmd
+```
+
+The shortcut starts PostgreSQL if needed, applies migrations, and opens [localhost:8765](http://localhost:8765/). If the project has no `.local` installation, follow the [first-time setup](#setup-run-and-test) below.
 
 ## Prerequisites
 
@@ -55,7 +65,7 @@ Open PowerShell in the project folder, where `README.md` and `compose.yaml` are 
 
    Open [localhost:8765](http://localhost:8765/) if the browser does not open automatically. Keep the terminal running. Press **Ctrl+C** to stop the dashboard. If port 8765 is already in use, add `--port 8766` to the dashboard command. Local demo mode is for synthetic data and binds to this computer only.
 
-If the portable Windows demo is already installed in `.local`, run `.\dashboard.cmd` instead. On macOS or Linux, create the environment with `python3.14 -m venv .venv`, use `.venv/bin/python` and `.venv/bin/reconcile`, and copy `.env.example` to `.env` with `cp`.
+On macOS or Linux, create the environment with `python3.14 -m venv .venv`, use `.venv/bin/python` and `.venv/bin/reconcile`, and copy `.env.example` to `.env` with `cp`.
 
 ### Run a dashboard demo
 
@@ -146,7 +156,7 @@ On Windows, use `.\.venv\Scripts\reconcile.exe` in place of `reconcile` if the v
 
 ## Project guide
 
-- [Agent instructions](AGENTS.md) and [implementation plan](docs/implementation-plan.md)
+- [Implementation plan](docs/implementation-plan.md)
 - [Architecture](docs/architecture.md) and [design decisions](docs/decisions/README.md)
 - [Input contracts and business rules](docs/business-rules.md)
 - [Runbook, backup, and recovery](docs/runbook.md)
