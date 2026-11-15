@@ -1,11 +1,12 @@
 import ast
+from datetime import date
 from pathlib import Path
 
 import pytest
 
 from reconciliation.contracts import InvalidRow, amount, local_date, timestamp
 from reconciliation.evaluation import explain_misses, metrics
-from reconciliation.generator import generate
+from reconciliation.generator import generate, regenerate
 
 
 @pytest.mark.parametrize("text,minor", [("0", 0), ("0.01", 1), ("12.3", 1230), ("10000.25", 1000025)])
@@ -38,6 +39,16 @@ def test_generator_repeats_exact_bytes_and_separates_truth(tmp_path):
     assert not (tmp_path / "a" / "inputs" / "answer_key.json").exists()
     with pytest.raises(ValueError):
         generate(tmp_path / "nested", tmp_path / "nested" / "truth", 11, 48, 2)
+
+
+def test_regenerate_uses_the_dates_in_the_manifest(tmp_path):
+    bundle = tmp_path / "original"
+    manifest = generate(bundle / "inputs", bundle / "truth", 11, 48, 2, two_files=True,
+                        first_day=date(2026, 11, 8), business_days=4)
+    copy = tmp_path / "copy"
+    recreated = regenerate(copy / "inputs", copy / "truth", manifest)
+    assert recreated == manifest
+    assert (copy / "truth" / "answer_key.json").read_bytes() == (bundle / "truth" / "answer_key.json").read_bytes()
 
 
 def test_zero_denominators_are_undefined():

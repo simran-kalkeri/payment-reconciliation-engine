@@ -101,7 +101,8 @@
           </div>
           <section id="reports" aria-labelledby="page-title">
             <div class="snapshot-bar">
-              <label>Snapshot<select id="snapshot"></select></label>
+              <label>Report version<select id="snapshot" aria-describedby="report-cutoff-help"></select></label>
+              <p class="sr-only" id="report-cutoff-help">The settlement cutoff is the latest arrival time included in this report version.</p>
               <div id="downloads" class="downloads" aria-label="Download report"></div>
             </div>
             <article class="hero">
@@ -121,7 +122,7 @@
             <div id="metrics" class="metrics" aria-label="Match counts"></div>
             <div class="columns">
               <article class="panel">
-                <div class="panel-heading"><div><h2>Exception breakdown</h2><p>Findings in this snapshot</p></div></div>
+                <div class="panel-heading"><div><h2>Exception breakdown</h2><p>Findings in this report version</p></div></div>
                 <div id="breakdown" class="breakdown"></div>
               </article>
               <article class="panel">

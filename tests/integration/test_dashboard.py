@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from contextlib import closing
 from hashlib import sha256
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from io import StringIO
 from pathlib import Path
 from threading import Event, Thread
@@ -12,7 +12,7 @@ from time import monotonic, sleep
 
 import pytest
 
-from reconciliation.contracts import FIELDS, local_start
+from reconciliation.contracts import FIELDS, local_start, timestamp
 from reconciliation.dashboard import DashboardServer
 from reconciliation.generator import generate
 from reconciliation.ingestion import ingest
@@ -148,6 +148,12 @@ def test_dashboard_reads_reports_and_reviews_with_existing_audit(database, tmp_p
 ])
 def test_dataset_regeneration_replaces_previous_bundle(
         tmp_path, monkeypatch, choose, first_total, second_total, first_days, second_days):
+    class FrozenClock(datetime):
+        @classmethod
+        def now(cls, tz):
+            return datetime(2026, 11, 14, 19, tzinfo=UTC).astimezone(tz)
+
+    monkeypatch.setattr("reconciliation.generator.datetime", FrozenClock)
     monkeypatch.setattr("reconciliation.generator.randbelow", lambda size: 0 if choose == "minimum" else size - 1)
     root = tmp_path / "datasets"
     root.mkdir()
@@ -183,6 +189,8 @@ def test_dataset_regeneration_replaces_previous_bundle(
             assert actual == expected_total
             answer = send(f"{route}/answer_key.json")[1]
             assert len(dataset["business_dates"]) == expected_days
+            assert dataset["business_dates"][-1] == "2026-11-11"
+            assert timestamp(answer["final_cutoff"]) == local_start(date(2026, 11, 15))
             assert answer["business_dates"] == dataset["business_dates"]
             assert {row["business_date"] for row in answer["rows"]} == set(dataset["business_dates"])
             assert actual - len(answer["invalid_rows"]) >= 10_000

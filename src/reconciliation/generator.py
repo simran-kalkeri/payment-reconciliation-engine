@@ -93,8 +93,11 @@ def generate_dashboard_dataset(inputs, truth_dir, seed, previous_total=None, *, 
     if previous_total is not None and (previous_total - extra_rows) % 2 == 0:
         previous_count = (previous_total - extra_rows) // 2
     count = choose_different(counts, previous_count)
+    # Use today's IST cutoff and leave room for on-time and late settlements.
+    first_day = datetime.now(BUSINESS_TZ).date() - timedelta(days=business_days + 3)
     manifest = generate(inputs, truth_dir, seed, count=count, two_files=True, merchant_profiles=True,
-                        business_days=business_days, seeded_counts=seeded_counts, ambiguous_cases=ambiguous_cases)
+                        business_days=business_days, seeded_counts=seeded_counts, ambiguous_cases=ambiguous_cases,
+                        first_day=first_day)
     actual = sum(file["rows"] for file in manifest["files"])
     if actual != 2 * count + extra_rows or not minimum <= actual <= maximum:
         raise ValueError("Generated dataset did not meet its row count limits")
@@ -107,11 +110,13 @@ def regenerate(inputs, truth_dir, manifest):
                     per_category=config.get("isolated_cases_per_category", 140),
                     two_files=len(manifest["files"]) == 2, merchant_profiles=config.get("merchant_profiles", False),
                     business_days=len(manifest["business_dates"]), seeded_counts=config.get("seeded_error_counts"),
-                    ambiguous_cases=config.get("ambiguous_cases", AMBIGUOUS_CASES))
+                    ambiguous_cases=config.get("ambiguous_cases", AMBIGUOUS_CASES),
+                    first_day=date.fromisoformat(manifest["business_dates"][0]))
 
 
 def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_files=False,
-             merchant_profiles=False, business_days=3, seeded_counts=None, ambiguous_cases=AMBIGUOUS_CASES):
+             merchant_profiles=False, business_days=3, seeded_counts=None, ambiguous_cases=AMBIGUOUS_CASES,
+             first_day=FIRST_DAY):
     inputs, truth_dir = Path(inputs), Path(truth_dir)
     if (inputs.resolve() == truth_dir.resolve() or inputs.resolve() in truth_dir.resolve().parents
             or truth_dir.resolve() in inputs.resolve().parents):
@@ -164,7 +169,7 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
             day_offset = index % business_days
         else:
             day_offset = rng.choices(day_offsets, day_weights)[0]
-        day = FIRST_DAY + timedelta(days=day_offset)
+        day = first_day + timedelta(days=day_offset)
         deadline = day + timedelta(days=1)
         ref = reference()
         merchant = rng.randrange(1, 41)
@@ -230,7 +235,7 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
 
     for _ in range(UNEXPECTED_SETTLEMENTS):
         common = dict(merchant="merchant-42", account="account-1", currency="INR")
-        day = FIRST_DAY + timedelta(days=rng.randrange(business_days))
+        day = first_day + timedelta(days=rng.randrange(business_days))
         right = settlement_row(common, reference(), 14900, 20, day)
         settlement.append(right)
         unexpected.append(dict(settlement=public_id(SETTLEMENT_SOURCE, right["id"]),
@@ -282,8 +287,8 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
             files.append(dict(name=name, kind=kind, source=source, date_format=layout,
                               rows=len(subset), sha256=file_hash(path)))
 
-    cutoff = local_start(FIRST_DAY + timedelta(days=business_days + 3)).isoformat()
-    dates = [(FIRST_DAY + timedelta(days=offset)).isoformat() for offset in day_offsets]
+    cutoff = local_start(first_day + timedelta(days=business_days + 3)).isoformat()
+    dates = [(first_day + timedelta(days=offset)).isoformat() for offset in day_offsets]
     configuration = dict(ledger_count=count, isolated_cases_per_category=per_category)
     if seeded_counts is not None:
         configuration = dict(ledger_count=count, business_days=business_days,

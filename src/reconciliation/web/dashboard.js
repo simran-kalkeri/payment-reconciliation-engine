@@ -91,6 +91,9 @@ const dateLabel = (value) => new Intl.DateTimeFormat("en-IN", {
 const timeLabel = (value) => new Intl.DateTimeFormat("en-IN", {
   dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata",
 }).format(new Date(value.replace(" ", "T"))) + " IST";
+const cutoffLabel = (value) => new Intl.DateTimeFormat("en-IN", {
+  dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata", hourCycle: "h23",
+}).format(new Date(value.replace(" ", "T"))) + " IST";
 const title = (key) => key.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 
 function el(tag, value, className) {
@@ -143,10 +146,16 @@ async function refresh(selection) {
     $("empty").textContent = "No published reports. Generate a dataset and run reconciliation to see results here.";
     if (!state.reports.length) return;
     const scopes = [...new Set(state.reports.map((report) => report.scope))];
-    scopes.sort((a, b) => (a === "evaluation" ? -1 : b === "evaluation" ? 1 : a.localeCompare(b)));
-    const scopeLabel = (scope) => scope.startsWith("dataset-") ? "Dataset " + scope.slice(8, 16) : scope;
-    selectOptions($("scope"), scopes.map((scope) => [scope, scopeLabel(scope)]), selection?.scope || $("scope").value);
-    fillDays(selection?.day || $("day").value);
+    const currentDatasetScope = state.dataset ? "dataset-" + state.dataset.id : null;
+    const previousScope = $("scope").value;
+    const selected = [selection?.scope, previousScope, currentDatasetScope, scopes.find((scope) => scope.startsWith("dataset-"))]
+      .find((scope) => scopes.includes(scope));
+    const scopeLabel = (scope) => {
+      if (!scope.startsWith("dataset-")) return scope;
+      return "Dataset " + scope.slice(8, 16) + (scope === currentDatasetScope ? " · Current dataset" : "");
+    };
+    selectOptions($("scope"), scopes.map((scope) => [scope, scopeLabel(scope)]), selected);
+    fillDays(selection?.day ?? ($("scope").value === previousScope ? $("day").value : undefined));
     await loadTab(true);
   } catch (error) {
     connection(error.status === 401 ? "Sign-in needed" : "Disconnected", false);
@@ -193,7 +202,7 @@ async function loadTab(reset) {
   const versions = await request("/api/reports?" + context());
   if (ticket !== state.reportLoad) return;
   selectOptions($("snapshot"), versions.map((version) => [version.id,
-    (version.current ? "Current · " : "Historical · ") + timeLabel(version.cutoff)]),
+    (version.current ? "Current" : "Historical") + " · Cutoff " + cutoffLabel(version.cutoff)]),
   reset ? undefined : $("snapshot").value);
   if (versions.length) await loadReport();
 }
@@ -210,10 +219,10 @@ async function loadReport() {
   const ticket = ++state.reportLoad;
   const report = await request("/api/reports/" + $("snapshot").value);
   if (ticket !== state.reportLoad) return;
-  $("snapshot-label").textContent = report.current ? "Current snapshot" : "Historical snapshot";
+  $("snapshot-label").textContent = report.current ? "Current version" : "Historical version";
   $("report-date").textContent = dateLabel(report.business_date);
   $("report-context").textContent = "Complete · Result #" + report.result_id + " · Run #" + report.run_id;
-  $("report-cutoff").textContent = "As of " + timeLabel(report.cutoff);
+  $("report-cutoff").textContent = "Settlement cutoff · " + cutoffLabel(report.cutoff);
   const rate = report.ledger_count ? (report.ledger_matched * 100 / report.ledger_count).toFixed(1) : null;
   $("match-donut").style.setProperty("--rate", (rate || "0") + "%");
   $("match-rate").textContent = rate === null ? "—" : rate + "%";
@@ -638,6 +647,7 @@ async function followPipeline(job) {
   state.following = true;
   try {
     renderPipeline(job);
+    const wasRunning = job.status === "running";
     while (job.status === "running") {
       await new Promise((resolve) => setTimeout(resolve, 350));
       job = await request("/api/pipeline");
@@ -646,6 +656,7 @@ async function followPipeline(job) {
       }
       renderPipeline(job);
     }
+    if (wasRunning && job.reports.length) await refresh({ scope: job.scope });
   } catch (error) {
     state.pipelineBusy = false;
     updateDatasetButtons();
