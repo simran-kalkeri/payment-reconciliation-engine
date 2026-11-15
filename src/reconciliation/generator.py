@@ -19,6 +19,9 @@ OVERLAPPING_CASES = 24
 AMBIGUOUS_CASES = 12
 UNEXPECTED_SETTLEMENTS = 24
 INVALID_ROWS = 8
+DASHBOARD_BUSINESS_DAYS = range(2, 8)
+DASHBOARD_ERROR_COUNTS = range(60, 131)
+DASHBOARD_AMBIGUOUS_CASES = range(4, 11)
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 PAYMENT_PROFILES = (
     ((5900, 9900, 14900, 24900, 39900), 2500, 75000),
@@ -64,45 +67,84 @@ def format_day(value, layout):
     return value.isoformat()
 
 
-def generate_dashboard_dataset(inputs, truth_dir, seed, previous_total=None):
-    # Missing and duplicate settlements balance each other in the generator.
-    extra_rows = AMBIGUOUS_CASES + UNEXPECTED_SETTLEMENTS + INVALID_ROWS
+def choose_different(options, previous):
+    skip_previous = previous in options
+    value = options.start + randbelow(len(options) - int(skip_previous))
+    if skip_previous and value >= previous:
+        value += 1
+    return value
+
+
+def generate_dashboard_dataset(inputs, truth_dir, seed, previous_total=None, *, previous_config=None):
+    previous_config = previous_config or {}
+    previous_days = previous_config.get("business_days", 3 if previous_total is not None else None)
+    business_days = choose_different(DASHBOARD_BUSINESS_DAYS, previous_days)
+    previous_errors = previous_config.get("seeded_error_counts", {})
+    seeded_counts = {kind: choose_different(DASHBOARD_ERROR_COUNTS, previous_errors.get(kind)) for kind in SEEDED}
+    ambiguous_cases = choose_different(DASHBOARD_AMBIGUOUS_CASES, previous_config.get("ambiguous_cases"))
+
+    # Each tied pair adds a ledger row and counts as one missing settlement in the key.
+    extra_rows = (2 * ambiguous_cases + UNEXPECTED_SETTLEMENTS + INVALID_ROWS
+                  + seeded_counts["duplicate_settlement"] - seeded_counts["missing_settlement"])
     # Keep at least 10,000 transactions even after quarantining invalid rows.
     minimum, maximum = 10_000 + INVALID_ROWS, 15_000
     counts = range((minimum - extra_rows + 1) // 2, (maximum - extra_rows) // 2 + 1)
     previous_count = None
     if previous_total is not None and (previous_total - extra_rows) % 2 == 0:
         previous_count = (previous_total - extra_rows) // 2
-    skip_previous = previous_count in counts
-    count = counts.start + randbelow(len(counts) - int(skip_previous))
-    if skip_previous and count >= previous_count:
-        count += 1
-    manifest = generate(inputs, truth_dir, seed, count=count, two_files=True, merchant_profiles=True)
+    count = choose_different(counts, previous_count)
+    manifest = generate(inputs, truth_dir, seed, count=count, two_files=True, merchant_profiles=True,
+                        business_days=business_days, seeded_counts=seeded_counts, ambiguous_cases=ambiguous_cases)
     actual = sum(file["rows"] for file in manifest["files"])
     if actual != 2 * count + extra_rows or not minimum <= actual <= maximum:
         raise ValueError("Generated dataset did not meet its row count limits")
     return manifest
 
 
+def regenerate(inputs, truth_dir, manifest):
+    config = manifest["configuration"]
+    return generate(inputs, truth_dir, manifest["seed"], count=config["ledger_count"],
+                    per_category=config.get("isolated_cases_per_category", 140),
+                    two_files=len(manifest["files"]) == 2, merchant_profiles=config.get("merchant_profiles", False),
+                    business_days=len(manifest["business_dates"]), seeded_counts=config.get("seeded_error_counts"),
+                    ambiguous_cases=config.get("ambiguous_cases", AMBIGUOUS_CASES))
+
+
 def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_files=False,
-             merchant_profiles=False):
+             merchant_profiles=False, business_days=3, seeded_counts=None, ambiguous_cases=AMBIGUOUS_CASES):
     inputs, truth_dir = Path(inputs), Path(truth_dir)
     if (inputs.resolve() == truth_dir.resolve() or inputs.resolve() in truth_dir.resolve().parents
             or truth_dir.resolve() in inputs.resolve().parents):
         raise ValueError("Use separate sibling directories for inputs and evaluation truth")
-    special_cases = OVERLAPPING_CASES + AMBIGUOUS_CASES
-    if per_category < 1 or count < per_category * len(SEEDED) + special_cases:
+    if not 1 <= business_days <= count or ambiguous_cases < 1:
+        raise ValueError("Invalid number of business days or ambiguous cases")
+    isolated = dict.fromkeys(SEEDED, per_category)
+    if seeded_counts is not None:
+        if seeded_counts.keys() != isolated.keys():
+            raise ValueError("Specify counts for all five seeded error types")
+        isolated = {**seeded_counts}
+        isolated["missing_settlement"] -= ambiguous_cases
+        isolated["reference_mismatch"] -= ambiguous_cases + OVERLAPPING_CASES // 2
+        isolated["amount_mismatch"] -= OVERLAPPING_CASES // 2
+        isolated["late_settlement"] -= OVERLAPPING_CASES
+    special_cases = OVERLAPPING_CASES + ambiguous_cases
+    isolated_total = sum(isolated.values())
+    if min(isolated.values()) < 1 or count < isolated_total + special_cases:
         raise ValueError("Dataset is too small for the requested error counts")
     inputs.mkdir(parents=True, exist_ok=True)
     truth_dir.mkdir(parents=True, exist_ok=True)
     rng = random.Random(seed)
     ledger, settlement, truths, invalid, unexpected, ambiguous = [], [], [], [], [], []
-    slots = rng.sample(range(count), per_category * len(SEEDED) + special_cases)
-    anomalies = {index: [label] for offset, label in enumerate(SEEDED)
-                 for index in slots[offset * per_category:(offset + 1) * per_category]}
-    overlap = slots[per_category * len(SEEDED):]
-    for index in overlap[:OVERLAPPING_CASES]:
-        anomalies[index] = ["late_settlement", "reference_mismatch" if index % 2 else "amount_mismatch"]
+    slots = rng.sample(range(count), isolated_total + special_cases)
+    anomalies, offset = {}, 0
+    for label in SEEDED:
+        for index in slots[offset:offset + isolated[label]]:
+            anomalies[index] = [label]
+        offset += isolated[label]
+    overlap = slots[isolated_total:]
+    for order, index in enumerate(overlap[:OVERLAPPING_CASES]):
+        reference_error = index % 2 if seeded_counts is None else order >= OVERLAPPING_CASES // 2
+        anomalies[index] = ["late_settlement", "reference_mismatch" if reference_error else "amount_mismatch"]
     ambiguous_slots = overlap[OVERLAPPING_CASES:]
 
     def opaque_id():
@@ -115,8 +157,13 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
         return dict(id=opaque_id(), **common, reference=ref, net=money(amount - fee), fee=money(fee),
                     settlement_date=day.isoformat(), available_at=timestamp(day, arrival_hour, arrival_minute))
 
+    day_offsets = range(business_days)
+    day_weights = [(29, 34, 37)[index % 3] for index in day_offsets]
     for index in range(count):
-        day_offset = rng.choices(range(3), (29, 34, 37))[0] if merchant_profiles else index % 3
+        if not merchant_profiles or (seeded_counts is not None and index < business_days):
+            day_offset = index % business_days
+        else:
+            day_offset = rng.choices(day_offsets, day_weights)[0]
         day = FIRST_DAY + timedelta(days=day_offset)
         deadline = day + timedelta(days=1)
         ref = reference()
@@ -183,7 +230,7 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
 
     for _ in range(UNEXPECTED_SETTLEMENTS):
         common = dict(merchant="merchant-42", account="account-1", currency="INR")
-        day = FIRST_DAY + timedelta(days=rng.randrange(3))
+        day = FIRST_DAY + timedelta(days=rng.randrange(business_days))
         right = settlement_row(common, reference(), 14900, 20, day)
         settlement.append(right)
         unexpected.append(dict(settlement=public_id(SETTLEMENT_SOURCE, right["id"]),
@@ -235,9 +282,12 @@ def generate(inputs, truth_dir, seed, count=12400, per_category=140, *, two_file
             files.append(dict(name=name, kind=kind, source=source, date_format=layout,
                               rows=len(subset), sha256=file_hash(path)))
 
-    cutoff = local_start(FIRST_DAY + timedelta(days=6)).isoformat()
-    dates = [(FIRST_DAY + timedelta(days=offset)).isoformat() for offset in range(3)]
+    cutoff = local_start(FIRST_DAY + timedelta(days=business_days + 3)).isoformat()
+    dates = [(FIRST_DAY + timedelta(days=offset)).isoformat() for offset in day_offsets]
     configuration = dict(ledger_count=count, isolated_cases_per_category=per_category)
+    if seeded_counts is not None:
+        configuration = dict(ledger_count=count, business_days=business_days,
+                             seeded_error_counts=seeded_counts, ambiguous_cases=ambiguous_cases)
     if merchant_profiles:
         configuration["merchant_profiles"] = True
     manifest = dict(seed=seed, schema_version=SCHEMA_VERSION, business_dates=dates, final_cutoff=cutoff,

@@ -36,9 +36,14 @@ def migrate(config: Path = Path("alembic.ini")):
 @app.command()
 def generate(inputs: Path, truth_dir: Path, seed: int = 4242, count: int = 12400, per_category: int = 140,
              two_files: bool = typer.Option(False, help="Write one ledger CSV and one settlement CSV."),
-             merchant_profiles: bool = typer.Option(False, help="Vary amounts, fees and arrival times by merchant.")):
+             merchant_profiles: bool = typer.Option(False, help="Vary amounts, fees and arrival times by merchant."),
+             from_manifest: Path | None = typer.Option(None, help="Reuse the seed and settings in a saved manifest.")):
     """Generate synthetic inputs and a separate answer key."""
     from .generator import generate as create_data
+    from .generator import regenerate
+    if from_manifest is not None:
+        print_json(regenerate(inputs, truth_dir, json.loads(from_manifest.read_text(encoding="utf-8"))))
+        return
     print_json(create_data(inputs, truth_dir, seed, count, per_category, two_files=two_files,
                            merchant_profiles=merchant_profiles))
 

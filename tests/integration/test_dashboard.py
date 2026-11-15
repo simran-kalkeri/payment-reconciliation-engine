@@ -1,6 +1,7 @@
 import csv
 import http.client
 import json
+from collections import Counter
 from contextlib import closing
 from hashlib import sha256
 from datetime import date, timedelta
@@ -140,11 +141,12 @@ def test_dashboard_reads_reports_and_reviews_with_existing_audit(database, tmp_p
             worker.join(5)
 
 
-@pytest.mark.parametrize(("choose", "first_total", "second_total"), [
-    ("minimum", 10_008, 10_010),
-    ("maximum", 15_000, 14_998),
+@pytest.mark.parametrize(("choose", "first_total", "second_total", "first_days", "second_days"), [
+    ("minimum", 10_008, 10_010, 2, 3),
+    ("maximum", 15_000, 14_998, 7, 6),
 ])
-def test_dataset_regeneration_replaces_previous_bundle(tmp_path, monkeypatch, choose, first_total, second_total):
+def test_dataset_regeneration_replaces_previous_bundle(
+        tmp_path, monkeypatch, choose, first_total, second_total, first_days, second_days):
     monkeypatch.setattr("reconciliation.generator.randbelow", lambda size: 0 if choose == "minimum" else size - 1)
     root = tmp_path / "datasets"
     root.mkdir()
@@ -168,7 +170,7 @@ def test_dataset_regeneration_replaces_previous_bundle(tmp_path, monkeypatch, ch
             finally:
                 with_connection.close()
 
-        def check_dataset(dataset, expected_total):
+        def check_dataset(dataset, expected_total, expected_days):
             route = f"/api/datasets/{dataset['id']}"
             actual = 0
             for file in dataset["files"]:
@@ -179,16 +181,23 @@ def test_dataset_regeneration_replaces_previous_bundle(tmp_path, monkeypatch, ch
                 actual += rows
             assert actual == expected_total
             answer = send(f"{route}/answer_key.json")[1]
+            assert len(dataset["business_dates"]) == expected_days
+            assert answer["business_dates"] == dataset["business_dates"]
+            assert {row["business_date"] for row in answer["rows"]} == set(dataset["business_dates"])
             assert actual - len(answer["invalid_rows"]) >= 10_000
-            assert {label for row in answer["rows"] for label in row["labels"]} == {
+            error_counts = Counter(label for row in answer["rows"] for label in row["labels"])
+            assert error_counts.keys() == {
                 "missing_settlement", "duplicate_settlement", "amount_mismatch", "late_settlement", "reference_mismatch",
             }
+            assert error_counts == dataset["configuration"]["seeded_error_counts"]
+            assert all(60 <= total <= 130 for total in error_counts.values())
+            return error_counts
 
         try:
             assert send("/api/datasets/current") == (200, None)
             status, first = send("/api/datasets", generate=True)
             assert status == 201
-            check_dataset(first, first_total)
+            first_errors = check_dataset(first, first_total, first_days)
             first_route = f"/api/datasets/{first['id']}"
 
             def fail_generation(*args, **kwargs):
@@ -202,7 +211,8 @@ def test_dataset_regeneration_replaces_previous_bundle(tmp_path, monkeypatch, ch
 
             status, second = send("/api/datasets", generate=True)
             assert status == 201
-            check_dataset(second, second_total)
+            second_errors = check_dataset(second, second_total, second_days)
+            assert all(first_errors[key] != second_errors[key] for key in first_errors)
             assert second["seed"] != first["seed"]
             hashes = {file["name"]: file["sha256"] for file in first["files"]}
             assert all(file["sha256"] != hashes[file["name"]] for file in second["files"])
@@ -229,8 +239,14 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
 
     monkeypatch.setattr("reconciliation.dashboard_pipeline.work", pause_at_validation)
 
-    def generate_test_dataset(inputs, truth, seed, previous_total):
-        return generate(inputs, truth, seed, count=160, per_category=5, two_files=True, merchant_profiles=True)
+    def generate_test_dataset(inputs, truth, seed, previous_total, *, previous_config):
+        days, seeded_count = (5, 40) if previous_config is None else (2, 45)
+        seeded_counts = dict.fromkeys(
+            ("missing_settlement", "duplicate_settlement", "amount_mismatch", "late_settlement", "reference_mismatch"),
+            seeded_count,
+        )
+        return generate(inputs, truth, 242 + days, count=260, two_files=True, merchant_profiles=True,
+                        business_days=days, seeded_counts=seeded_counts, ambiguous_cases=4)
 
     monkeypatch.setattr("reconciliation.dashboard.generate_dashboard_dataset", generate_test_dataset)
     root = tmp_path / "datasets"
@@ -279,9 +295,9 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
             assert "valid answer key" in first["error"]
             assert "evaluation" not in first
             assert set(first["steps"]) == {"read", "stage", "validate", "match", "publish", "evaluate"}
-            assert len(first["reports"]) == 3
+            assert len(first["reports"]) == 5
             assert len(list(raw.glob("*/*"))) == 2
-            assert len(send("/api/reports")[1]) == 3
+            assert len(send("/api/reports")[1]) == 5
             for item in first["reports"]:
                 status, report = send(f"/api/reports/{item['result_id']}")
                 assert status == 200 and report["scope"] == first["scope"]
@@ -306,11 +322,25 @@ def test_dashboard_pipeline_runs_and_replays_generated_inputs(database, tmp_path
                 "missing_settlement", "duplicate_settlement", "amount_mismatch", "late_settlement", "reference_mismatch",
             }
             assert evaluation["false_matches"] == {"exact": 0, "diagnostic": 0, "fuzzy": 0}
-            assert evaluation["misses"]["reason_counts"]["Tied candidates"] == 12
+            assert evaluation["misses"]["reason_counts"]["Tied candidates"] == 4
             assert evaluation["missed_true_links"] == len(evaluation["misses"]["cases"])
+            assert send(route, post=True)[0] == 202
+            second_replay = finished()
+            assert second_replay == replay
+            assert counts(database) == before
             with server.pipeline.lock:
                 server.pipeline.job = None
             assert send("/api/pipeline") == (200, replay)
+
+            status, replacement = send("/api/datasets", post=True)
+            assert status == 201
+            assert send(f"/api/datasets/{replacement['id']}/reconcile", post=True)[0] == 202
+            new_run = finished()
+            assert new_run["status"] == "complete", new_run
+            assert new_run["scope"] != replay["scope"]
+            assert len(new_run["reports"]) == 2
+            assert new_run["evaluation"]["error_metrics"] != evaluation["error_metrics"]
+            assert len(send("/api/reports")[1]) == 7
         finally:
             continue_validation.set()
             server.shutdown()

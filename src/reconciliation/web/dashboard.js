@@ -372,7 +372,9 @@ function showDataset(dataset) {
   const settlements = dataset.files.find((file) => file.kind === "settlement");
   $("dataset-summary").textContent = integer.format(ledger.rows + settlements.rows) + " total rows · " +
     integer.format(ledger.rows) + " ledger · " +
-    integer.format(settlements.rows) + " settlement rows · seed " + dataset.seed;
+    integer.format(settlements.rows) + " settlement rows" +
+    (dataset.business_dates ? " · " + dataset.business_dates.length + " business days" : "") +
+    " · seed " + dataset.seed;
   $("dataset-downloads").replaceChildren(...[
     [ledger.name, "Ledger CSV"], [settlements.name, "Settlements CSV"],
     ["manifest.json", "Manifest JSON"], ["answer_key.json", "Answer key JSON"],

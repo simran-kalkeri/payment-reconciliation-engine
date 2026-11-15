@@ -300,9 +300,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 seed = secrets.randbits(48)
             with TemporaryDirectory(dir=root) as temp:
                 bundle = Path(temp) / "dataset"
-                manifest = generate_dashboard_dataset(bundle / "inputs", bundle / "truth", seed, previous_total)
+                manifest = generate_dashboard_dataset(
+                    bundle / "inputs", bundle / "truth", seed, previous_total,
+                    previous_config=previous.get("configuration") if previous else None,
+                )
                 bundle.rename(root / dataset_id)
-            dataset = {"id": dataset_id, "seed": seed, "files": manifest["files"]}
+            dataset = {"id": dataset_id, **{key: manifest[key] for key in ("seed", "files", "configuration", "business_dates")}}
             json_file(root / "current.json", dataset)
             cleanup_pending = remove_previous_datasets(root, dataset_id)
         finally:
