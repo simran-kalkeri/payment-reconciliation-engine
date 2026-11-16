@@ -103,7 +103,8 @@ On the fixed-seed benchmark in this repository, the matcher linked **12,248 of 1
 
 | Artifact | Where to find it |
 | --- | --- |
-| Matching rationale, precision and recall, and missed cases | [Write-up and metrics table](docs/write-up.md) · [Case evidence](artifacts/evidence/mistake-analysis.json) |
+| Two-file dashboard run | [Project write-up (PDF)](docs/project-write-up.pdf) |
+| Benchmark rationale, precision and recall, and missed cases | [Benchmark write-up and metrics](docs/write-up.md) · [Case evidence](artifacts/evidence/mistake-analysis.json) |
 | Reproducible inputs and answer key | [Evidence index](artifacts/evidence/README.md) |
 | Sample daily reconciliation report | [May 12 report](artifacts/evidence/reports/2025-05-12/report.md) |
 | Rerun and review evidence | [Before and after record counts and result hashes](artifacts/evidence/rerun.json) · [Review history](artifacts/evidence/review.json) |
@@ -160,5 +161,5 @@ On Windows, use `.\.venv\Scripts\reconcile.exe` in place of `reconcile` if the v
 - [Architecture](docs/architecture.md) and [design decisions](docs/decisions/README.md)
 - [Input contracts and business rules](docs/business-rules.md)
 - [Runbook, backup, and recovery](docs/runbook.md)
-- [Measured results and one-page write-up](docs/write-up.md)
+- [One-page project write-up (PDF)](docs/project-write-up.pdf) and [benchmark results](docs/write-up.md)
 - [Synthetic datasets and verification artifacts](artifacts/evidence/README.md)
